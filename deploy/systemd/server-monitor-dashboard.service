@@ -1,0 +1,17 @@
+[Unit]
+Description=Server Monitor Dashboard
+After=network.target server-monitor-backend.service
+Requires=server-monitor-backend.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/server-monitor/dashboard
+Environment=PORT=3000
+Environment=NEXT_PUBLIC_API_BASE=http://127.0.0.1:8080
+ExecStart=/usr/bin/node /opt/server-monitor/dashboard/.next/standalone/server.js
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target

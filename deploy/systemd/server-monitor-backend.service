@@ -1,0 +1,19 @@
+[Unit]
+Description=Server Monitor Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/server-monitor/backend
+Environment=PORT=8080
+Environment=DATA_DIR=/opt/server-monitor/backend/data
+# 如需开启控制台访问令牌，可取消下行注释并填入真实值
+# Environment=DASHBOARD_TOKEN=replace-me
+ExecStartPre=/usr/bin/bash -lc 'cd /opt/server-monitor/backend && /usr/bin/npm rebuild better-sqlite3 --build-from-source >/var/log/server-monitor-backend-rebuild.log 2>&1 || /usr/bin/npm install >/var/log/server-monitor-backend-rebuild.log 2>&1'
+ExecStart=/usr/bin/node /opt/server-monitor/backend/src/index.js
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -47,3 +47,9 @@
 
 ## 快速启动
 详见各目录下说明。
+
+## 工程化文档
+- 部署说明：`DEPLOY.md`
+- 运维排障：`OPERATIONS.md`
+- 变更记录：`CHANGELOG.md`
+- systemd 模板：`deploy/systemd/`
