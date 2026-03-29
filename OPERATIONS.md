@@ -92,3 +92,9 @@ make rebuild-backend-native
 make build-dashboard
 make restart
 ```
+
+## 健康检查脚本
+
+```bash
+bash scripts/check.sh
+```

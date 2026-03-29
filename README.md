@@ -52,7 +52,10 @@
 - 部署说明：`DEPLOY.md`
 - 运维排障：`OPERATIONS.md`
 - 环境变量：`ENV.md`
+- 架构说明：`ARCHITECTURE.md`
+- 备份恢复：`BACKUP.md`
 - 变更记录：`CHANGELOG.md`
 - systemd 模板：`deploy/systemd/`
 - Nginx 模板：`deploy/nginx/`
 - 常用命令：`Makefile`
+- 健康检查脚本：`scripts/check.sh`
