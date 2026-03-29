@@ -3,6 +3,7 @@ package main
 import (
     "bufio"
     "bytes"
+    "context"
     "crypto/sha1"
     "encoding/hex"
     "encoding/json"
@@ -11,6 +12,7 @@ import (
     "net"
     "net/http"
     "os"
+    osExec "os/exec"
     "runtime"
     "strconv"
     "strings"
@@ -38,10 +40,62 @@ type Payload struct {
     Metadata     map[string]string `json:"metadata"`
 }
 
+type ActionTask struct {
+    TaskID         string                 `json:"task_id"`
+    ActionKey      string                 `json:"action_key"`
+    Params         map[string]interface{} `json:"params"`
+    TimeoutSeconds int                    `json:"timeout_seconds"`
+    LeaseToken     string                 `json:"lease_token"`
+}
+
+type FetchTaskResponse struct {
+    Ok   bool        `json:"ok"`
+    Task *ActionTask `json:"task"`
+}
+
+type TaskResult struct {
+    ServerID      string `json:"server_id"`
+    LeaseToken    string `json:"lease_token"`
+    Status        string `json:"status"`
+    ExitCode      int    `json:"exit_code"`
+    ResultCode    string `json:"result_code"`
+    ResultSummary string `json:"result_summary"`
+    LogExcerpt    string `json:"log_excerpt"`
+    ErrorMessage  string `json:"error_message,omitempty"`
+}
+
+type ActionDef struct {
+    ScriptPath string
+    TimeoutSec int
+    ParamOrder []string
+}
+
+var actionRegistry = map[string]ActionDef{
+    "update_xcore": {
+        ScriptPath: "/opt/core-service/scripts/update_xcore.sh",
+        TimeoutSec: 300,
+        ParamOrder: []string{},
+    },
+    "install_ixvpn": {
+        ScriptPath: "/opt/core-service/scripts/install_ixvpn.sh",
+        TimeoutSec: 600,
+        ParamOrder: []string{"server_id", "xagent_download_url", "server_ip"},
+    },
+    "install_xnftables": {
+        ScriptPath: "/opt/core-service/scripts/install_xnftables.sh",
+        TimeoutSec: 600,
+        ParamOrder: []string{"server_id", "download_url"},
+    },
+}
+
 func main() {
     apiBase := getEnv("MONITOR_API", "http://127.0.0.1:8080")
     intervalSec := getEnvInt("REPORT_INTERVAL", 10)
     displayName := getEnv("DISPLAY_NAME", "")
+    hostname, _ := os.Hostname()
+    stableID := machineStableID(hostname)
+
+    go taskLoop(apiBase, stableID)
 
     for {
         payload, err := collect(displayName, intervalSec)
@@ -56,6 +110,115 @@ func main() {
         }
         time.Sleep(time.Duration(intervalSec) * time.Second)
     }
+}
+
+func taskLoop(apiBase string, serverID string) {
+    for {
+        task, err := fetchNextTask(apiBase, serverID)
+        if err != nil {
+            fmt.Println("fetchNextTask error:", err)
+            time.Sleep(5 * time.Second)
+            continue
+        }
+        if task == nil {
+            time.Sleep(5 * time.Second)
+            continue
+        }
+        fmt.Println("task received:", task.TaskID, task.ActionKey)
+        if err := reportTaskStart(apiBase, serverID, task.TaskID, task.LeaseToken); err != nil {
+            fmt.Println("reportTaskStart error:", err)
+            time.Sleep(3 * time.Second)
+            continue
+        }
+        result := executeTask(serverID, *task)
+        if err := reportTaskResult(apiBase, task.TaskID, result); err != nil {
+            fmt.Println("reportTaskResult error:", err)
+        }
+    }
+}
+
+func fetchNextTask(apiBase string, serverID string) (*ActionTask, error) {
+    caps := make([]string, 0, len(actionRegistry))
+    for key := range actionRegistry { caps = append(caps, key) }
+    body := map[string]interface{}{"server_id": serverID, "agent_version": "1.5.0", "capabilities": caps}
+    raw, _ := json.Marshal(body)
+    req, err := http.NewRequest(http.MethodPost, apiBase+"/api/agent/tasks/next", bytes.NewReader(raw))
+    if err != nil { return nil, err }
+    req.Header.Set("Content-Type", "application/json")
+    client := &http.Client{Timeout: 8 * time.Second}
+    resp, err := client.Do(req)
+    if err != nil { return nil, err }
+    defer resp.Body.Close()
+    if resp.StatusCode >= 300 { return nil, fmt.Errorf("unexpected status %d", resp.StatusCode) }
+    var result FetchTaskResponse
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return nil, err }
+    if !result.Ok || result.Task == nil { return nil, nil }
+    return result.Task, nil
+}
+
+func reportTaskStart(apiBase, serverID, taskID, leaseToken string) error {
+    body := map[string]interface{}{"server_id": serverID, "lease_token": leaseToken}
+    raw, _ := json.Marshal(body)
+    req, err := http.NewRequest(http.MethodPost, apiBase+"/api/agent/tasks/"+taskID+"/start", bytes.NewReader(raw))
+    if err != nil { return err }
+    req.Header.Set("Content-Type", "application/json")
+    client := &http.Client{Timeout: 8 * time.Second}
+    resp, err := client.Do(req)
+    if err != nil { return err }
+    defer resp.Body.Close()
+    if resp.StatusCode >= 300 { data, _ := io.ReadAll(resp.Body); return fmt.Errorf("start status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(data))) }
+    return nil
+}
+
+func reportTaskResult(apiBase, taskID string, result TaskResult) error {
+    raw, _ := json.Marshal(result)
+    req, err := http.NewRequest(http.MethodPost, apiBase+"/api/agent/tasks/"+taskID+"/result", bytes.NewReader(raw))
+    if err != nil { return err }
+    req.Header.Set("Content-Type", "application/json")
+    client := &http.Client{Timeout: 10 * time.Second}
+    resp, err := client.Do(req)
+    if err != nil { return err }
+    defer resp.Body.Close()
+    if resp.StatusCode >= 300 { data, _ := io.ReadAll(resp.Body); return fmt.Errorf("result status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(data))) }
+    return nil
+}
+
+func executeTask(serverID string, task ActionTask) TaskResult {
+    def, ok := actionRegistry[task.ActionKey]
+    if !ok {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "unsupported_action", ResultSummary: "action not supported by this agent", ErrorMessage: "unsupported action"}
+    }
+    args := make([]string, 0, len(def.ParamOrder))
+    for _, key := range def.ParamOrder {
+        val, exists := task.Params[key]
+        if !exists {
+            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "missing_param", ResultSummary: "missing required param: " + key, ErrorMessage: "missing param"}
+        }
+        args = append(args, fmt.Sprintf("%v", val))
+    }
+    if _, err := os.Stat(def.ScriptPath); err != nil {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "script_not_found", ResultSummary: "script file not found", ErrorMessage: err.Error()}
+    }
+    timeout := task.TimeoutSeconds
+    if timeout <= 0 { timeout = def.TimeoutSec }
+    ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+    defer cancel()
+    cmd := osExec.CommandContext(ctx, def.ScriptPath, args...)
+    var output bytes.Buffer
+    cmd.Stdout = &output
+    cmd.Stderr = &output
+    err := cmd.Run()
+    logs := output.String()
+    if len(logs) > 8000 { logs = logs[len(logs)-8000:] }
+    if ctx.Err() == context.DeadlineExceeded {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "timeout", ExitCode: -1, ResultCode: "timeout", ResultSummary: "task execution timed out", LogExcerpt: logs, ErrorMessage: "task timeout"}
+    }
+    if err != nil {
+        exitCode := 1
+        if ee, ok := err.(*osExec.ExitError); ok { exitCode = ee.ExitCode() }
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: exitCode, ResultCode: "script_failed", ResultSummary: "script execution failed", LogExcerpt: logs, ErrorMessage: err.Error()}
+    }
+    return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "task completed successfully", LogExcerpt: logs}
 }
 
 func collect(displayName string, intervalSec int) (*Payload, error) {
@@ -79,28 +242,7 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     diskUsage := percent(diskUsed, diskTotal)
     ports := map[string]bool{}
     for _, p := range []string{"443", "6379", "8888", "8789"} { ports[p] = checkPort("127.0.0.1:" + p) }
-    return &Payload{
-        ServerID:    id,
-        Hostname:    hostname,
-        DisplayName: fallback(displayName, hostname),
-        IP:          ip,
-        OS:          runtime.GOOS,
-        Arch:        runtime.GOARCH,
-        InstanceID:  instanceID,
-        CPUUsage:    cpuUsage,
-        CPUCount:    runtime.NumCPU(),
-        MemoryUsage: memUsage,
-        MemoryUsed:  memUsed,
-        MemoryTotal: memTotal,
-        DiskUsage:   diskUsage,
-        DiskUsed:    diskUsed,
-        DiskTotal:   diskTotal,
-        Ports:       ports,
-        Metadata: map[string]string{
-            "agent_version":   "1.4.0",
-            "report_interval": strconv.Itoa(intervalSec),
-        },
-    }, nil
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.5.0", "report_interval": strconv.Itoa(intervalSec)}}, nil
 }
 
 type cpuStat struct { idle, total uint64 }

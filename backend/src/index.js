@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -21,6 +22,51 @@ const DEFAULT_RULES = {
   port_8888: { enabled: true, consecutive: 1 },
   port_8789: { enabled: true, consecutive: 1 },
 };
+const DEFAULT_ACTION_DEFINITIONS = [
+  {
+    action_key: 'install_ixvpn',
+    name: '安装 ixvpn',
+    description: '安装/重建 ixvpn + xagent',
+    script_path: '/opt/core-service/scripts/install_ixvpn.sh',
+    param_schema: JSON.stringify({
+      required: ['server_id', 'xagent_download_url', 'server_ip'],
+      properties: {
+        server_id: { type: 'string', maxLength: 128 },
+        xagent_download_url: { type: 'string', format: 'url' },
+        server_ip: { type: 'string', format: 'ipv4' }
+      }
+    }),
+    role_scope: JSON.stringify(['ixvpn']),
+    risk_level: 'guarded',
+    timeout_seconds: 600
+  },
+  {
+    action_key: 'install_xnftables',
+    name: '安装 xnftables',
+    description: '安装/重建 xvpn-bridge-server',
+    script_path: '/opt/core-service/scripts/install_xnftables.sh',
+    param_schema: JSON.stringify({
+      required: ['server_id', 'download_url'],
+      properties: {
+        server_id: { type: 'string', maxLength: 128 },
+        download_url: { type: 'string', format: 'url' }
+      }
+    }),
+    role_scope: JSON.stringify(['xbridge']),
+    risk_level: 'guarded',
+    timeout_seconds: 600
+  },
+  {
+    action_key: 'update_xcore',
+    name: '升级 xcore',
+    description: '增量更新 xcore',
+    script_path: '/opt/core-service/scripts/update_xcore.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }),
+    role_scope: JSON.stringify(['ixvpn']),
+    risk_level: 'safe',
+    timeout_seconds: 300
+  }
+];
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new Database(DB_PATH);
@@ -31,6 +77,11 @@ CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TE
 CREATE TABLE IF NOT EXISTS servers (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL UNIQUE, hostname TEXT, display_name TEXT, ip TEXT, instance_id TEXT, os TEXT, arch TEXT, group_name TEXT DEFAULT '未分组', tags TEXT DEFAULT '[]', metadata TEXT DEFAULT '{}', status TEXT DEFAULT 'unknown', issue_count INTEGER DEFAULT 0, stable_order INTEGER, last_seen TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL, cpu_usage REAL DEFAULT 0, memory_usage REAL DEFAULT 0, memory_used INTEGER DEFAULT 0, memory_total INTEGER DEFAULT 0, disk_usage REAL DEFAULT 0, disk_used INTEGER DEFAULT 0, disk_total INTEGER DEFAULT 0, port_443 INTEGER DEFAULT 0, port_6379 INTEGER DEFAULT 0, port_8888 INTEGER DEFAULT 0, port_8789 INTEGER DEFAULT 0, issues TEXT DEFAULT '[]', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS action_definitions (id INTEGER PRIMARY KEY AUTOINCREMENT, action_key TEXT NOT NULL UNIQUE, name TEXT NOT NULL, description TEXT DEFAULT '', script_path TEXT NOT NULL, param_schema TEXT NOT NULL DEFAULT '{}', role_scope TEXT NOT NULL DEFAULT '[]', risk_level TEXT NOT NULL DEFAULT 'safe', timeout_seconds INTEGER NOT NULL DEFAULT 300, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS action_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL UNIQUE, server_id TEXT NOT NULL, action_key TEXT NOT NULL, params_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'pending', source TEXT NOT NULL DEFAULT 'dashboard', created_by TEXT DEFAULT '', priority INTEGER NOT NULL DEFAULT 100, timeout_seconds INTEGER NOT NULL DEFAULT 300, lease_token TEXT DEFAULT '', lease_expires_at TEXT DEFAULT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, started_at TEXT DEFAULT NULL, finished_at TEXT DEFAULT NULL, result_code TEXT DEFAULT '', exit_code INTEGER DEFAULT NULL, result_summary TEXT DEFAULT '', log_excerpt TEXT DEFAULT '', error_message TEXT DEFAULT '', retry_count INTEGER NOT NULL DEFAULT 0, parent_incident_id TEXT DEFAULT '', metadata TEXT NOT NULL DEFAULT '{}');
+CREATE INDEX IF NOT EXISTS idx_action_tasks_server_status ON action_tasks(server_id, status);
+CREATE INDEX IF NOT EXISTS idx_action_tasks_status_priority_created ON action_tasks(status, priority, created_at);
+CREATE INDEX IF NOT EXISTS idx_action_tasks_action_key ON action_tasks(action_key);
 `);
 try { db.exec(`ALTER TABLE servers ADD COLUMN stable_order INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE servers ADD COLUMN instance_id TEXT`); } catch {}
@@ -41,10 +92,18 @@ try { db.prepare(`UPDATE servers SET group_name = ? WHERE group_name = 'Ungroupe
 [DEFAULT_GROUP, '美国', '韩国', '日本'].forEach((name, i) => ensureGroup.run(name, i));
 const ensureSetting = db.prepare(`INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)`);
 ensureSetting.run('monitor_rules', JSON.stringify(DEFAULT_RULES));
+const ensureAction = db.prepare(`INSERT OR IGNORE INTO action_definitions(action_key, name, description, script_path, param_schema, role_scope, risk_level, timeout_seconds, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`);
+DEFAULT_ACTION_DEFINITIONS.forEach((a) => ensureAction.run(a.action_key, a.name, a.description, a.script_path, a.param_schema, a.role_scope, a.risk_level, a.timeout_seconds));
 
 function getRules() { const row = db.prepare(`SELECT value FROM settings WHERE key = 'monitor_rules'`).get(); if (!row) return DEFAULT_RULES; try { const parsed = JSON.parse(row.value); return Object.fromEntries(Object.entries(DEFAULT_RULES).map(([key, val]) => [key, { ...val, ...(parsed[key] || {}) }])); } catch { return DEFAULT_RULES; } }
 function cleanupOldMetrics() { db.prepare(`DELETE FROM metrics WHERE created_at < datetime('now', ?)`).run(`-${Math.max(1, METRICS_RETENTION_DAYS)} days`); }
+function cleanupExpiredActionTasks() {
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE action_tasks SET status = 'expired', error_message = CASE WHEN error_message = '' THEN 'lease expired' ELSE error_message END, finished_at = COALESCE(finished_at, ?), lease_token = '', lease_expires_at = NULL WHERE status = 'leased' AND lease_expires_at IS NOT NULL AND lease_expires_at < ?`).run(now, now);
+  db.prepare(`UPDATE action_tasks SET status = 'timeout', error_message = CASE WHEN error_message = '' THEN 'task execution timeout' ELSE error_message END, finished_at = COALESCE(finished_at, ?), lease_token = '', lease_expires_at = NULL WHERE status = 'running' AND started_at IS NOT NULL AND datetime(started_at, '+' || timeout_seconds || ' seconds') < datetime(?)`).run(now, now);
+}
 cleanupOldMetrics();
+setInterval(cleanupExpiredActionTasks, 15000);
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
@@ -59,10 +118,79 @@ function calculateStatus(payload) {
   for (const port of [443, 6379, 8888, 8789]) { const key = `port_${port}`; if (rules[key]?.enabled && !ports[String(port)] && checkMetricConsecutive(payload.server_id, key, (v) => Number(v) === 0, Number(rules[key]?.consecutive || 1))) issues.push(`端口 ${port} 连续${rules[key].consecutive}次 DOWN`); }
   return { status: issues.length ? 'problem' : 'healthy', issues, issue_count: issues.length };
 }
+function isValidIPv4(value) { return /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(String(value || '')); }
+function isValidUrl(value) { try { new URL(String(value || '')); return true; } catch { return false; } }
+function validateParams(definition, params = {}) {
+  let schema = {}; try { schema = JSON.parse(definition.param_schema || '{}'); } catch { return { ok: false, error: 'invalid param_schema' }; }
+  const required = Array.isArray(schema.required) ? schema.required : []; const properties = schema.properties || {};
+  for (const key of required) { const val = params[key]; if (val == null || String(val).trim() === '') return { ok: false, error: `missing param: ${key}` }; }
+  for (const [key, rule] of Object.entries(properties)) {
+    const val = params[key]; if (val == null) continue; const str = String(val);
+    if (rule.maxLength && str.length > rule.maxLength) return { ok: false, error: `param too long: ${key}` };
+    if (rule.format === 'url' && !isValidUrl(str)) return { ok: false, error: `invalid url: ${key}` };
+    if (rule.format === 'ipv4' && !isValidIPv4(str)) return { ok: false, error: `invalid ipv4: ${key}` };
+  }
+  return { ok: true };
+}
+function genTaskId() { return `task_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`; }
+function genLeaseToken() { return `lease_${crypto.randomBytes(12).toString('hex')}`; }
+
 app.get('/api/health', (req, res) => res.json({ ok: true, hostname: os.hostname(), port: PORT, offlineAfterSeconds: OFFLINE_AFTER_SECONDS, metricsRetentionDays: METRICS_RETENTION_DAYS }));
 app.get('/api/settings/monitor-rules', authMiddleware, (req, res) => res.json(getRules()));
 app.patch('/api/settings/monitor-rules', authMiddleware, (req, res) => { const body = req.body || {}; const nextRules = Object.fromEntries(Object.entries(DEFAULT_RULES).map(([key, val]) => [key, { ...val, ...(body[key] || {}) }])); db.prepare(`UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'monitor_rules'`).run(JSON.stringify(nextRules)); res.json({ ok: true, rules: nextRules }); });
 app.post('/api/agent/register', (req, res) => { const body = req.body || {}, serverId = body.server_id; if (!serverId) return res.status(400).json({ error: 'server_id required' }); ensureGroup.run(DEFAULT_GROUP, 0); const now = new Date().toISOString(); const existing = db.prepare(`SELECT id FROM servers WHERE server_id = ?`).get(serverId); const sameHostOffline = db.prepare(`SELECT id, server_id FROM servers WHERE hostname = ? AND server_id <> ? ORDER BY last_seen DESC, id DESC LIMIT 1`).get(body.hostname || '', serverId); if (!existing && sameHostOffline) { db.prepare(`UPDATE metrics SET server_id = ? WHERE server_id = ?`).run(serverId, sameHostOffline.server_id); db.prepare(`UPDATE servers SET server_id = ?, hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE id = ?`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, sameHostOffline.id); } else if (!existing) { const result = db.prepare(`INSERT INTO servers (server_id, hostname, display_name, ip, instance_id, os, arch, group_name, tags, metadata, status, issue_count, stable_order, last_seen, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'healthy', 0, NULL, ?, ?)`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', DEFAULT_GROUP, JSON.stringify(body.tags || []), JSON.stringify(body.metadata || {}), now, now); db.prepare(`UPDATE servers SET stable_order = id WHERE id = ?`).run(result.lastInsertRowid); } else { db.prepare(`UPDATE servers SET hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE server_id = ?`).run(body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, serverId); } db.prepare(`INSERT INTO metrics (server_id, cpu_usage, memory_usage, memory_used, memory_total, disk_usage, disk_used, disk_total, port_443, port_6379, port_8888, port_8789, issues) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`).run(serverId, Number(body.cpu_usage || 0), Number(body.memory_usage || 0), Number(body.memory_used || 0), Number(body.memory_total || 0), Number(body.disk_usage || 0), Number(body.disk_used || 0), Number(body.disk_total || 0), body.ports?.['443'] ? 1 : 0, body.ports?.['6379'] ? 1 : 0, body.ports?.['8888'] ? 1 : 0, body.ports?.['8789'] ? 1 : 0); const derived = calculateStatus(body); db.prepare(`UPDATE servers SET status = ?, issue_count = ?, updated_at = ? WHERE server_id = ?`).run(derived.status, derived.issue_count, now, serverId); db.prepare(`UPDATE metrics SET issues = ? WHERE id = (SELECT id FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT 1)`).run(JSON.stringify(derived.issues), serverId); res.json({ ok: true, status: derived.status, issues: derived.issues, assigned_group: DEFAULT_GROUP }); });
+app.post('/api/actions/tasks', authMiddleware, (req, res) => {
+  const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const actionKey = String(body.action_key || '').trim(); const params = body.params || {}; const priority = Number(body.priority || 100); const source = String(body.source || 'dashboard'); const createdBy = String(body.created_by || 'dashboard');
+  if (!serverId || !actionKey) return res.status(400).json({ error: 'server_id and action_key required' });
+  const def = db.prepare(`SELECT * FROM action_definitions WHERE action_key = ? AND enabled = 1`).get(actionKey);
+  if (!def) return res.status(404).json({ error: 'action definition not found' });
+  const activeTask = db.prepare(`SELECT task_id, status FROM action_tasks WHERE server_id = ? AND status IN ('pending', 'leased', 'running') ORDER BY created_at ASC LIMIT 1`).get(serverId);
+  if (activeTask) return res.status(409).json({ error: 'server already has active task', activeTask });
+  const v = validateParams(def, params); if (!v.ok) return res.status(400).json({ error: v.error });
+  const taskId = genTaskId();
+  db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, '{}')`).run(taskId, serverId, actionKey, JSON.stringify(params), source, createdBy, priority, Number(def.timeout_seconds || 300));
+  return res.json({ ok: true, task: { task_id: taskId, status: 'pending' } });
+});
+app.get('/api/actions/tasks', authMiddleware, (req, res) => {
+  const { server_id, status, action_key, limit } = req.query || {}; const where = []; const params = [];
+  if (server_id) { where.push(`server_id = ?`); params.push(server_id); }
+  if (status) { where.push(`status = ?`); params.push(status); }
+  if (action_key) { where.push(`action_key = ?`); params.push(action_key); }
+  const sql = `SELECT * FROM action_tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200)));
+  res.json(db.prepare(sql).all(...params));
+});
+app.get('/api/actions/tasks/:taskId', authMiddleware, (req, res) => { const row = db.prepare(`SELECT * FROM action_tasks WHERE task_id = ?`).get(req.params.taskId); if (!row) return res.status(404).json({ error: 'task not found' }); res.json(row); });
+app.post('/api/agent/tasks/next', (req, res) => {
+  const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const capabilities = Array.isArray(body.capabilities) ? body.capabilities.map(String) : [];
+  if (!serverId) return res.status(400).json({ error: 'server_id required' });
+  const active = db.prepare(`SELECT * FROM action_tasks WHERE server_id = ? AND status IN ('leased', 'running') ORDER BY created_at ASC LIMIT 1`).get(serverId);
+  if (active) return res.json({ ok: true, task: null });
+  const candidates = db.prepare(`SELECT t.* FROM action_tasks t JOIN action_definitions d ON d.action_key = t.action_key WHERE t.server_id = ? AND t.status = 'pending' AND d.enabled = 1 ORDER BY t.priority ASC, t.created_at ASC, t.id ASC LIMIT 20`).all(serverId);
+  const picked = candidates.find((task) => capabilities.includes(task.action_key));
+  if (!picked) return res.json({ ok: true, task: null });
+  const leaseToken = genLeaseToken(); const leaseExpiresAt = new Date(Date.now() + 60 * 1000).toISOString();
+  const result = db.prepare(`UPDATE action_tasks SET status = 'leased', lease_token = ?, lease_expires_at = ? WHERE task_id = ? AND status = 'pending'`).run(leaseToken, leaseExpiresAt, picked.task_id);
+  if (!result.changes) return res.json({ ok: true, task: null });
+  const task = db.prepare(`SELECT * FROM action_tasks WHERE task_id = ?`).get(picked.task_id);
+  return res.json({ ok: true, task: { task_id: task.task_id, action_key: task.action_key, params: JSON.parse(task.params_json || '{}'), timeout_seconds: task.timeout_seconds, lease_token: leaseToken } });
+});
+app.post('/api/agent/tasks/:taskId/start', (req, res) => {
+  const taskId = req.params.taskId; const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const leaseToken = String(body.lease_token || '').trim();
+  const task = db.prepare(`SELECT * FROM action_tasks WHERE task_id = ?`).get(taskId);
+  if (!task) return res.status(404).json({ error: 'task not found' });
+  if (task.server_id !== serverId || task.lease_token !== leaseToken) return res.status(403).json({ error: 'invalid lease' });
+  db.prepare(`UPDATE action_tasks SET status = 'running', started_at = COALESCE(started_at, ?) WHERE task_id = ?`).run(new Date().toISOString(), taskId);
+  res.json({ ok: true });
+});
+app.post('/api/agent/tasks/:taskId/result', (req, res) => {
+  const taskId = req.params.taskId; const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const leaseToken = String(body.lease_token || '').trim(); const status = String(body.status || '').trim();
+  if (!['success', 'failed', 'timeout', 'cancelled'].includes(status)) return res.status(400).json({ error: 'invalid status' });
+  const task = db.prepare(`SELECT * FROM action_tasks WHERE task_id = ?`).get(taskId);
+  if (!task) return res.status(404).json({ error: 'task not found' });
+  if (task.server_id !== serverId || task.lease_token !== leaseToken) return res.status(403).json({ error: 'invalid lease' });
+  db.prepare(`UPDATE action_tasks SET status = ?, exit_code = ?, result_code = ?, result_summary = ?, log_excerpt = ?, error_message = ?, finished_at = ?, lease_token = '', lease_expires_at = NULL WHERE task_id = ?`).run(status, body.exit_code == null ? null : Number(body.exit_code), String(body.result_code || ''), String(body.result_summary || ''), String(body.log_excerpt || '').slice(-8000), String(body.error_message || ''), new Date().toISOString(), taskId);
+  res.json({ ok: true });
+});
 app.post('/api/groups', authMiddleware, (req, res) => { const { name } = req.body || {}; if (!name) return res.status(400).json({ error: 'name required' }); ensureGroup.run(name, 999); res.json({ ok: true }); });
 app.patch('/api/groups/reorder', authMiddleware, (req, res) => { const { ids } = req.body || {}; if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids required' }); const stmt = db.prepare(`UPDATE groups SET sort_order = ? WHERE id = ?`); ids.forEach((id, idx) => stmt.run(idx, id)); res.json({ ok: true }); });
 app.get('/api/groups', authMiddleware, (req, res) => res.json(db.prepare(`SELECT id, name, sort_order, created_at FROM groups ORDER BY sort_order ASC, id ASC`).all()));
