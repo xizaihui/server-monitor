@@ -13,7 +13,7 @@ export default function ActionTaskModal({ open, server, servers, onClose, onCrea
   const [definitions, setDefinitions] = useState([]);
   const [loadingDefs, setLoadingDefs] = useState(false);
   const [actionKey, setActionKey] = useState('');
-  const [form, setForm] = useState({ server_id: '', xagent_download_url: '', server_ip: '', download_url: '' });
+  const [form, setForm] = useState({ server_id: '', xagent_download_url: '', server_ip: '', download_url: '', ops_scripts_url: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,6 +44,7 @@ export default function ActionTaskModal({ open, server, servers, onClose, onCrea
       server_ip: seed?.ip || prev.server_ip || '',
       xagent_download_url: actionKey === 'install_ixvpn' ? (prev.xagent_download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xagent/xagent-server.zip') : prev.xagent_download_url,
       download_url: actionKey === 'install_xnftables' ? (prev.download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xbridge/xbridge-server.zip') : prev.download_url,
+      ops_scripts_url: actionKey === 'init_ops_scripts' ? (prev.ops_scripts_url || meta.ops_scripts_url || 'http://43.165.172.3/downloads/packages/ops/ops-scripts.zip') : prev.ops_scripts_url,
     }));
   }, [open, singleServer, targetServers, currentDef, actionKey]);
 
@@ -66,6 +67,11 @@ export default function ActionTaskModal({ open, server, servers, onClose, onCrea
         { key: 'server_ip', label: isBulk ? '证书绑定 IP（批量时请确认统一参数是否合适）' : '证书绑定 IP', placeholder: '例如 43.165.172.3' },
       ];
     }
+    if (actionKey === 'init_ops_scripts') {
+      return [
+        { key: 'ops_scripts_url', label: '脚本包地址', placeholder: 'http://43.165.172.3/downloads/packages/ops/ops-scripts.zip' },
+      ];
+    }
     return [];
   }, [actionKey, isBulk]);
 
@@ -84,6 +90,9 @@ export default function ActionTaskModal({ open, server, servers, onClose, onCrea
     }
     if (actionKey === 'apply_cert') {
       return { server_ip: form.server_ip };
+    }
+    if (actionKey === 'init_ops_scripts') {
+      return { ops_scripts_url: form.ops_scripts_url };
     }
     return {};
   }

@@ -75,6 +75,13 @@ const DEFAULT_ACTION_DEFINITIONS = [
     param_schema: JSON.stringify({ required: ['server_ip'], properties: { server_ip: { type: 'string', format: 'ipv4' } } }),
     role_scope: JSON.stringify(['xagent', 'xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
     trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/home/cert/Self-visa-certificate-no-domain-name-exists/server.crt', '/home/cert/Self-visa-certificate-no-domain-name-exists/server.key'] }), fallback_action_key: '', priority: 80, metadata: JSON.stringify({})
+  },
+  {
+    action_key: 'init_ops_scripts', name: '初始化脚本', display_name: '初始化脚本', category: 'setup', description: '下载并初始化 /opt/core-service/scripts 运维脚本资产',
+    script_path: '/opt/core-service/scripts/init_ops_scripts.sh',
+    param_schema: JSON.stringify({ required: ['ops_scripts_url'], properties: { ops_scripts_url: { type: 'string', format: 'url' } } }),
+    role_scope: JSON.stringify(['xagent', 'xbridge', 'redis']), risk_level: 'safe', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/opt/core-service/scripts/restart_xagent.sh', '/opt/core-service/scripts/update_xcore.sh'] }), fallback_action_key: '', priority: 5, metadata: JSON.stringify({ ops_scripts_url: `${DOWNLOAD_BASE_URL}/packages/ops/ops-scripts.zip` })
   }
 ];
 

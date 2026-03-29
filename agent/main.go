@@ -101,6 +101,11 @@ var actionRegistry = map[string]ActionDef{
         TimeoutSec: 600,
         ParamOrder: []string{"server_ip"},
     },
+    "init_ops_scripts": {
+        ScriptPath: "/opt/core-service/scripts/init_ops_scripts.sh",
+        TimeoutSec: 600,
+        ParamOrder: []string{"ops_scripts_url"},
+    },
     "install_ixvpn": {
         ScriptPath: "/opt/core-service/scripts/install_ixvpn.sh",
         TimeoutSec: 600,
