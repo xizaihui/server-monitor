@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-export default function ActionTaskModal({ open, server, servers, onClose, onCreated }) {
+export default function ActionTaskModal({ open, server, servers, initialActionKey, onClose, onCreated }) {
   const targetServers = useMemo(() => {
     if (Array.isArray(servers) && servers.length) return servers;
     if (server) return [server];
@@ -25,11 +25,11 @@ export default function ActionTaskModal({ open, server, servers, onClose, onCrea
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setDefinitions(list);
-        setActionKey((prev) => prev || list[0]?.action_key || '');
+        setActionKey((prev) => initialActionKey || prev || list[0]?.action_key || '');
       })
       .catch(() => setDefinitions([]))
       .finally(() => setLoadingDefs(false));
-  }, [open]);
+  }, [open, initialActionKey]);
 
   const currentDef = useMemo(() => definitions.find((x) => x.action_key === actionKey) || null, [definitions, actionKey]);
   const isBulk = targetServers.length > 1;

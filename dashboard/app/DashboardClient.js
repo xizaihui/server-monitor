@@ -65,6 +65,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [editServer, setEditServer] = useState(null);
   const [deleteServer, setDeleteServer] = useState(null);
   const [taskServers, setTaskServers] = useState([]);
+  const [taskInitialActionKey, setTaskInitialActionKey] = useState('');
   const [taskHistoryServer, setTaskHistoryServer] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
@@ -175,6 +176,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   }, [currentPage, totalPages]);
   const allPageSelected = paged.length > 0 && paged.every((s) => selectedIds.includes(s.server_id));
   const selectedServers = useMemo(() => servers.filter((s) => selectedIds.includes(s.server_id)), [servers, selectedIds]);
+  const scriptActionableServers = useMemo(() => filtered.filter((s) => !s.metadata?.ops_scripts_version || s.metadata?.ops_scripts_version !== CURRENT_OPS_VERSION), [filtered]);
 
   function onChangeStatus(next) { setStatus(next); setPage(1); }
   function onChangeQuery(v) { setQuery(v); setPage(1); }
@@ -268,7 +270,9 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           {selectedIds.length > 0 ? <div className="small">当前已选 {selectedIds.length} 个节点</div> : <div className="small">当前未选择节点</div>}
         </div>
         <div className="toolbarGroup">
-          <button className="primaryBtn compactPageBtn" type="button" onClick={() => setTaskServers(selectedServers)} disabled={!selectedServers.length || bulkBusy}>递交</button>
+          <button className="primaryBtn compactPageBtn" type="button" onClick={() => { setTaskInitialActionKey(''); setTaskServers(selectedServers); }} disabled={!selectedServers.length || bulkBusy}>递交</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => { setTaskInitialActionKey('init_ops_scripts'); setTaskServers(selectedServers); }} disabled={!selectedServers.length || bulkBusy}>初始化脚本</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => { setTaskInitialActionKey('init_ops_scripts'); setTaskServers(scriptActionableServers); }} disabled={!scriptActionableServers.length || bulkBusy}>初始化未就绪节点</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setBulkMoveOpen(true)} disabled={bulkBusy || !selectedIds.length}>移动分类</button>
           <button className="dangerBtn compactPageBtn" type="button" onClick={bulkDelete} disabled={bulkBusy || !selectedIds.length}>{bulkBusy ? '处理中...' : '删除节点'}</button>
         </div>
@@ -362,7 +366,8 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       <ActionTaskModal
         open={taskServers.length > 0}
         servers={taskServers}
-        onClose={() => { setTaskServers([]); }}
+        initialActionKey={taskInitialActionKey}
+        onClose={() => { setTaskServers([]); setTaskInitialActionKey(''); }}
         onCreated={(result) => {
           setTaskServers([]);
           if (result?.total) {
