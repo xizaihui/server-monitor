@@ -714,6 +714,10 @@ tr:hover .inlineCopyBtn { opacity: 1; }
   line-height: 1.4;
 }
 
+.inlineReadiness.healthy { color: #166534; }
+.inlineReadiness.problem { color: #b45309; }
+.inlineReadiness.offline { color: #b42318; }
+
 .taskHistoryModal {
   max-height: calc(100vh - 32px);
   overflow: hidden;

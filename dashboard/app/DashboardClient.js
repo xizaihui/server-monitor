@@ -55,6 +55,13 @@ function scriptsBadge(server) {
   return { text: version, tone: 'healthy' };
 }
 
+function readinessBadge(server) {
+  const scriptsVersion = server?.metadata?.ops_scripts_version || '';
+  if (!scriptsVersion) return { text: '待初始化', tone: 'offline' };
+  if (scriptsVersion !== CURRENT_OPS_VERSION) return { text: '待更新', tone: 'problem' };
+  return { text: '可执行动作', tone: 'healthy' };
+}
+
 export default function DashboardClient({ servers: initialServers, groups, selectedGroup = 'ALL', initialRules }) {
   const [servers, setServers] = useState(initialServers.filter((x) => x.ip !== '127.0.0.2' && x.server_id !== 'manual-test-node'));
   const [query, setQuery] = useState('');
@@ -310,6 +317,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
             <tbody>
               {paged.map((s) => {
                 const sb = scriptsBadge(s);
+                const rb = readinessBadge(s);
                 return (
                 <tr key={s.server_id} className={`${s.status === 'problem' ? 'problemRow' : s.status === 'offline' ? 'offlineRow' : ''} compactRow`}>
                   <td className="stickyCol stickyBodyCol checkboxCol"><input type="checkbox" checked={selectedIds.includes(s.server_id)} onChange={() => toggleOne(s.server_id)} /></td>
@@ -320,7 +328,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       </button>
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
-                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'}</div>
+                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span></div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
                   <td>

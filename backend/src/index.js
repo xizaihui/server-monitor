@@ -207,6 +207,22 @@ app.get('/api/packages/checksums', authMiddleware, (req, res) => {
     res.status(500).json({ error: error.message || 'checksum failed' });
   }
 });
+app.get('/api/packages/catalog', authMiddleware, (req, res) => {
+  try {
+    const names = ['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'];
+    const catalog = names.map((name) => {
+      const stable = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable', 'current');
+      let stableTarget = '';
+      try { stableTarget = fs.readlinkSync(stable); } catch {}
+      const releasesDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases');
+      const releases = fs.existsSync(releasesDir) ? fs.readdirSync(releasesDir).sort().reverse() : [];
+      return { name, stable: stableTarget, releases };
+    });
+    res.json(catalog);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'catalog failed' });
+  }
+});
 app.get('/api/packages/md5', authMiddleware, (req, res) => {
   try {
     const pkg = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'xcore.zip');
