@@ -214,6 +214,9 @@ func reportTaskResult(apiBase, taskID string, result TaskResult) error {
 }
 
 func executeTask(serverID string, task ActionTask) TaskResult {
+    if task.ActionKey == "init_ops_scripts" {
+        return executeInitOpsScripts(serverID, task)
+    }
     def, ok := actionRegistry[task.ActionKey]
     if !ok {
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "unsupported_action", ResultSummary: "action not supported by this agent", ErrorMessage: "unsupported action"}
@@ -275,6 +278,98 @@ func executeTask(serverID string, task ActionTask) TaskResult {
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: exitCode, ResultCode: resultCode, ResultSummary: resultSummary, LogExcerpt: logs, ErrorMessage: err.Error()}
     }
     return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "任务执行成功", LogExcerpt: logs}
+}
+
+func executeInitOpsScripts(serverID string, task ActionTask) TaskResult {
+    urlVal, ok := task.Params["ops_scripts_url"]
+    if !ok || strings.TrimSpace(fmt.Sprint(urlVal)) == "" {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "missing_param", ResultSummary: "missing required param: ops_scripts_url", ErrorMessage: "missing param"}
+    }
+
+    opsURL := strings.TrimSpace(fmt.Sprint(urlVal))
+    targetDir := "/opt/core-service/scripts"
+    backupRoot := "/opt/core-service/backups"
+    stamp := time.Now().Format("2006-01-02-150405")
+    pkgPath := "/tmp/ops-scripts.zip"
+    extractDir := "/tmp/ops-scripts-extract"
+
+    _ = os.Remove(pkgPath)
+    _ = os.RemoveAll(extractDir)
+    _ = os.MkdirAll(targetDir, 0o755)
+    _ = os.MkdirAll(backupRoot, 0o755)
+
+    resp, err := http.Get(opsURL)
+    if err != nil {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "download_failed", ResultSummary: "下载脚本包失败", ErrorMessage: err.Error()}
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode >= 300 {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: resp.StatusCode, ResultCode: "download_failed", ResultSummary: "下载脚本包失败", ErrorMessage: fmt.Sprintf("unexpected status %d", resp.StatusCode)}
+    }
+
+    out, err := os.Create(pkgPath)
+    if err != nil {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "write_failed", ResultSummary: "写入脚本包失败", ErrorMessage: err.Error()}
+    }
+    if _, err := io.Copy(out, resp.Body); err != nil {
+        out.Close()
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "write_failed", ResultSummary: "写入脚本包失败", ErrorMessage: err.Error()}
+    }
+    out.Close()
+
+    if hasFiles(targetDir) {
+        backupDir := fmt.Sprintf("%s/scripts-%s", backupRoot, stamp)
+        if err := os.MkdirAll(backupDir, 0o755); err == nil {
+            _, _ = runCommand(120, "bash", "-lc", fmt.Sprintf("cp -a %s/. %s/", shellEscape(targetDir), shellEscape(backupDir)))
+        }
+    }
+
+    if _, err := runCommand(120, "unzip", "-qo", pkgPath, "-d", extractDir); err != nil {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "extract_failed", ResultSummary: "解压脚本包失败", ErrorMessage: err.Error()}
+    }
+
+    if _, err := runCommand(120, "bash", "-lc", fmt.Sprintf("mkdir -p %s && cp -a %s/scripts/. %s/ && find %s -maxdepth 1 -type f -name '*.sh' -exec chmod 755 {} \\;", shellEscape(targetDir), shellEscape(extractDir), shellEscape(targetDir), shellEscape(targetDir))); err != nil {
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "deploy_failed", ResultSummary: "部署脚本失败", ErrorMessage: err.Error()}
+    }
+
+    _ = os.Remove(pkgPath)
+    _ = os.RemoveAll(extractDir)
+
+    return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "脚本初始化成功", LogExcerpt: fmt.Sprintf("ops scripts initialized from %s to %s", opsURL, targetDir)}
+}
+
+func hasFiles(dir string) bool {
+    entries, err := os.ReadDir(dir)
+    if err != nil {
+        return false
+    }
+    for _, entry := range entries {
+        if !entry.IsDir() {
+            return true
+        }
+    }
+    return false
+}
+
+func runCommand(timeoutSec int, name string, args ...string) (string, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
+    defer cancel()
+    cmd := osExec.CommandContext(ctx, name, args...)
+    var buf bytes.Buffer
+    cmd.Stdout = &buf
+    cmd.Stderr = &buf
+    err := cmd.Run()
+    if ctx.Err() == context.DeadlineExceeded {
+        return buf.String(), fmt.Errorf("timeout")
+    }
+    if err != nil {
+        return buf.String(), fmt.Errorf(strings.TrimSpace(buf.String()))
+    }
+    return buf.String(), nil
+}
+
+func shellEscape(s string) string {
+    return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 func collect(displayName string, intervalSec int) (*Payload, error) {
