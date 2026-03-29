@@ -5,6 +5,8 @@ import { useState } from 'react';
 export default function PackageUploadModal({ open, onClose, onUploaded }) {
   const [folder, setFolder] = useState('packages/xagent');
   const [file, setFile] = useState(null);
+  const [release, setRelease] = useState('');
+  const [publishStable, setPublishStable] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
@@ -21,6 +23,8 @@ export default function PackageUploadModal({ open, onClose, onUploaded }) {
       const form = new FormData();
       form.append('file', file);
       form.append('folder', folder);
+      form.append('release', release);
+      form.append('publish_stable', publishStable ? '1' : '0');
       const res = await fetch('/api/proxy/uploads/packages', {
         method: 'POST',
         body: form,
@@ -46,7 +50,7 @@ export default function PackageUploadModal({ open, onClose, onUploaded }) {
         <div className="drawerHeader">
           <div>
             <div className="drawerTitle">上传安装包 / 更新包</div>
-            <div className="drawerSub">上传后直接走本机文件服务地址</div>
+            <div className="drawerSub">上传为 release，可选直接发布为 stable</div>
           </div>
           <button className="iconButton" type="button" onClick={onClose}>×</button>
         </div>
@@ -59,15 +63,22 @@ export default function PackageUploadModal({ open, onClose, onUploaded }) {
             <option value="packages/xbridge">xbridge</option>
             <option value="packages/xcore">xcore</option>
             <option value="packages/redis">redis</option>
+            <option value="packages/ops">ops</option>
           </select>
+
+          <label className="fieldLabel">release 名称（可选）</label>
+          <input className="input fullInput" value={release} onChange={(e) => setRelease(e.target.value)} placeholder="例如 2026.03.29-2，不填则自动生成" />
 
           <label className="fieldLabel">文件</label>
           <input className="input fullInput" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
 
+          <label className="fieldLabel" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={publishStable} onChange={(e) => setPublishStable(e.target.checked)} />
+            上传后直接切为 stable
+          </label>
+
           <div className="small" style={{ background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px' }}>
-            默认发布目录：/downloads/{folder}/文件名
-            <br />
-            如果同名文件已存在，系统会先备份到 /downloads/backups/... 再覆盖，方便你回滚。
+            上传会先生成 release 包，再同步覆盖当前目录；如果勾选，会自动切为 stable。
           </div>
 
           {error ? <div className="small" style={{ color: '#b42318' }}>{error}</div> : null}

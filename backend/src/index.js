@@ -295,6 +295,8 @@ app.post('/api/uploads/packages', authMiddleware, (req, res) => {
       let folder = 'packages/xagent';
       let fileName = '';
       let fileBuffer = null;
+      let release = '';
+      let publishStable = '0';
       for (const part of parts) {
         const [rawHeaders, rawBody] = part.split('\r\n\r\n');
         if (!rawHeaders || !rawBody) continue;
@@ -303,30 +305,37 @@ app.post('/api/uploads/packages', authMiddleware, (req, res) => {
         const fieldName = disposition[1];
         const originalName = disposition[2];
         const bodyBinary = rawBody.replace(/\r\n--$/, '').replace(/\r\n$/, '');
-        if (fieldName === 'folder') {
-          folder = bodyBinary.trim().replace(/^\/+/, '').replace(/\.\./g, '');
-        }
+        if (fieldName === 'folder') folder = bodyBinary.trim().replace(/^\/+/, '').replace(/\.\./g, '');
+        if (fieldName === 'release') release = bodyBinary.trim().replace(/[^a-zA-Z0-9._-]/g, '');
+        if (fieldName === 'publish_stable') publishStable = bodyBinary.trim();
         if (fieldName === 'file' && originalName) {
           fileName = path.basename(originalName).replace(/[^a-zA-Z0-9._-]/g, '_');
           fileBuffer = Buffer.from(bodyBinary, 'binary');
         }
       }
       if (!fileName || !fileBuffer) return res.status(400).json({ error: 'file missing' });
-      if (!['packages/agents','packages/xagent','packages/xbridge','packages/xcore','packages/redis'].includes(folder)) folder = 'packages/xagent';
-      const targetDir = path.join(DOWNLOAD_ROOT, folder);
-      const backupDir = path.join(DOWNLOAD_ROOT, 'backups', folder.replace(/^packages\//, ''));
-      fs.mkdirSync(targetDir, { recursive: true });
+      if (!['packages/agents','packages/xagent','packages/xbridge','packages/xcore','packages/redis','packages/ops'].includes(folder)) folder = 'packages/xagent';
+      if (!release) release = new Date().toISOString().slice(0, 10).replace(/-/g, '.') + '-auto';
+      const pkgName = folder.replace(/^packages\//, '');
+      const releasesDir = path.join(DOWNLOAD_ROOT, folder, 'releases', release);
+      const currentDir = path.join(DOWNLOAD_ROOT, folder);
+      const backupDir = path.join(DOWNLOAD_ROOT, 'backups', pkgName);
+      fs.mkdirSync(releasesDir, { recursive: true });
+      fs.mkdirSync(currentDir, { recursive: true });
       fs.mkdirSync(backupDir, { recursive: true });
-      const targetPath = path.join(targetDir, fileName);
+      const releasePath = path.join(releasesDir, fileName);
+      fs.writeFileSync(releasePath, fileBuffer);
+      fs.chmodSync(releasePath, 0o644);
+      const currentPath = path.join(currentDir, fileName);
       let backupPath = '';
-      if (fs.existsSync(targetPath)) {
+      if (fs.existsSync(currentPath)) {
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
         backupPath = path.join(backupDir, `${stamp}__${fileName}`);
-        fs.copyFileSync(targetPath, backupPath);
+        fs.copyFileSync(currentPath, backupPath);
       }
-      fs.writeFileSync(targetPath, fileBuffer);
-      fs.chmodSync(targetPath, 0o644);
-      return res.json({ ok: true, file_name: fileName, path: targetPath, url: `${DOWNLOAD_BASE_URL}/${folder}/${fileName}`, backup_path: backupPath || null });
+      fs.copyFileSync(releasePath, currentPath);
+      if (publishStable === '1') switchStableRelease(pkgName, release);
+      return res.json({ ok: true, file_name: fileName, release, path: releasePath, url: `${DOWNLOAD_BASE_URL}/${folder}/releases/${release}/${fileName}`, current_url: `${DOWNLOAD_BASE_URL}/${folder}/${fileName}`, stable_url: publishStable === '1' ? `${DOWNLOAD_BASE_URL}/${folder}/stable/current/${fileName}` : null, backup_path: backupPath || null });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'upload failed' });
     }
