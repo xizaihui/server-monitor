@@ -39,3 +39,10 @@
 - 修复本机业务节点动作 pending 根因：正式安装本机 agent 服务后可正常领取任务
 - 修复 `DOWN` 端口胶囊显示溢出
 - 修复新节点执行 `init_ops_scripts` 时因 `/opt/core-service/scripts/init_ops_scripts.sh` 不存在导致失败的问题
+
+
+### P0 bootstrap improvements
+- install-agent.sh 支持 `INIT_OPS_SCRIPTS=1`，安装 agent 后可选自动初始化 `/opt/core-service/scripts`
+- agent 上报 `ops_scripts_version` 元数据
+- `init_ops_scripts` 支持 VERSION 相同即跳过，避免重复覆盖
+- 包仓库增加 `releases/<version>` 与 `stable/current` 目录骨架

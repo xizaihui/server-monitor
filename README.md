@@ -110,3 +110,14 @@
 - Nginx 模板：`deploy/nginx/`
 - 常用命令：`Makefile`
 - 健康检查脚本：`scripts/check.sh`
+
+
+## P0 Bootstrap
+
+新节点可通过 install-agent.sh 一次完成 agent 安装，并可选自动初始化脚本资产：
+
+```bash
+curl -fsSL http://43.165.172.3/downloads/install-agent.sh | BACKEND_URL=http://43.165.172.3:8080 REPORT_INTERVAL=10 INIT_OPS_SCRIPTS=1 bash
+```
+
+agent 会额外上报 `ops_scripts_version`，便于页面和后端识别脚本版本状态。

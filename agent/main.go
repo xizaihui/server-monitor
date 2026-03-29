@@ -288,6 +288,7 @@ func executeInitOpsScripts(serverID string, task ActionTask) TaskResult {
 
     opsURL := strings.TrimSpace(fmt.Sprint(urlVal))
     targetDir := "/opt/core-service/scripts"
+    currentVersion := readVersionFile(targetDir + "/VERSION")
     backupRoot := "/opt/core-service/backups"
     stamp := time.Now().Format("2006-01-02-150405")
     pkgPath := "/tmp/ops-scripts.zip"
@@ -326,6 +327,13 @@ func executeInitOpsScripts(serverID string, task ActionTask) TaskResult {
 
     if _, err := runCommand(120, "unzip", "-qo", pkgPath, "-d", extractDir); err != nil {
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "extract_failed", ResultSummary: "解压脚本包失败", ErrorMessage: err.Error()}
+    }
+
+    newVersion := readVersionFile(extractDir + "/scripts/VERSION")
+    if currentVersion != "" && newVersion != "" && currentVersion == newVersion {
+        _ = os.Remove(pkgPath)
+        _ = os.RemoveAll(extractDir)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "already_current", ResultSummary: "脚本版本已是最新", LogExcerpt: fmt.Sprintf("ops scripts version %s already current", currentVersion)}
     }
 
     if _, err := runCommand(120, "bash", "-lc", fmt.Sprintf("mkdir -p %s && cp -a %s/scripts/. %s/ && find %s -maxdepth 1 -type f -name '*.sh' -exec chmod 755 {} \\;", shellEscape(targetDir), shellEscape(extractDir), shellEscape(targetDir), shellEscape(targetDir))); err != nil {
@@ -378,6 +386,7 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     if strings.TrimSpace(ip) == "" { ip = firstIP() }
     id := machineStableID(hostname)
     instanceID := readInstanceID("/opt/core-service/xagent-server/etc/xagent.yaml")
+    opsVersion := readVersionFile("/opt/core-service/scripts/VERSION")
     cpu1, err := readCPUStat()
     if err != nil { return nil, err }
     time.Sleep(500 * time.Millisecond)
@@ -393,7 +402,7 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     diskUsage := percent(diskUsed, diskTotal)
     ports := map[string]bool{}
     for _, p := range []string{"443", "6379", "8888", "8789"} { ports[p] = checkPort("127.0.0.1:" + p) }
-    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.5.0", "report_interval": strconv.Itoa(intervalSec)}}, nil
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.6.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion}}, nil
 }
 
 type cpuStat struct { idle, total uint64 }
@@ -404,6 +413,7 @@ func readDiskUsage(path string) (uint64, uint64, error) { var stat syscall.Statf
 func checkPort(addr string) bool { conn, err := net.DialTimeout("tcp", addr, 1200*time.Millisecond); if err != nil { return false }; _ = conn.Close(); return true }
 func report(url string, payload *Payload) error { body, _ := json.Marshal(payload); req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(body)); req.Header.Set("Content-Type", "application/json"); client := &http.Client{Timeout: 8 * time.Second}; resp, err := client.Do(req); if err != nil { return err }; defer resp.Body.Close(); if resp.StatusCode >= 300 { return fmt.Errorf("unexpected status %d", resp.StatusCode) }; return nil }
 func readInstanceID(filePath string) string { data, err := os.ReadFile(filePath); if err != nil { return "" }; scanner := bufio.NewScanner(bytes.NewReader(data)); for scanner.Scan() { line := strings.TrimSpace(scanner.Text()); if strings.HasPrefix(line, "InstanceId:") { return strings.TrimSpace(strings.TrimPrefix(line, "InstanceId:")) } }; return "" }
+func readVersionFile(filePath string) string { data, err := os.ReadFile(filePath); if err != nil { return "" }; return strings.TrimSpace(string(data)) }
 func machineStableID(hostname string) string { candidates := []string{}; for _, p := range []string{"/etc/machine-id", "/var/lib/dbus/machine-id"} { if b, err := os.ReadFile(p); err == nil { v := strings.TrimSpace(string(b)); if v != "" { candidates = append(candidates, v); break } } }; if b, err := os.ReadFile("/sys/class/dmi/id/product_uuid"); err == nil { v := strings.TrimSpace(string(b)); if v != "" { candidates = append(candidates, v) } }; candidates = append(candidates, hostname); return stableID(strings.Join(candidates, "|")) }
 func stableID(input string) string { sum := sha1.Sum([]byte(input)); return hex.EncodeToString(sum[:12]) }
 func publicIP() string { urls := []string{"https://api.ipify.org", "https://ifconfig.me/ip", "https://ipv4.icanhazip.com"}; client := &http.Client{Timeout: 4 * time.Second}; for _, url := range urls { req, _ := http.NewRequest(http.MethodGet, url, nil); resp, err := client.Do(req); if err != nil { continue }; data, _ := io.ReadAll(io.LimitReader(resp.Body, 128)); _ = resp.Body.Close(); ip := strings.TrimSpace(string(data)); parsed := net.ParseIP(ip); if parsed != nil && parsed.To4() != nil { return ip } }; return "" }
