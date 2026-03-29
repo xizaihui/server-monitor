@@ -6,10 +6,16 @@ export default function TaskHistoryModal({ open, server, onClose }) {
   const [items, setItems] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [activeTaskId, setActiveTaskId] = useState('');
 
   useEffect(() => {
     if (!open || !server) return;
     setLoading(true);
+    setDetail(null);
+    setDetailError('');
+    setActiveTaskId('');
     fetch(`/api/proxy/actions/tasks?server_id=${encodeURIComponent(server.server_id)}&limit=10`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => setItems(Array.isArray(data) ? data : []))
@@ -18,12 +24,26 @@ export default function TaskHistoryModal({ open, server, onClose }) {
   }, [open, server]);
 
   async function loadDetail(taskId) {
+    setActiveTaskId(taskId);
+    setDetailLoading(true);
+    setDetailError('');
+    setDetail(null);
     try {
       const res = await fetch(`/api/proxy/actions/tasks/${taskId}`, { cache: 'no-store' });
       const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setDetailError(data?.error || '加载详情失败');
+        return;
+      }
+      if (!data || !data.task_id) {
+        setDetailError('任务详情为空');
+        return;
+      }
       setDetail(data);
     } catch {
-      setDetail(null);
+      setDetailError('加载详情失败，请稍后重试');
+    } finally {
+      setDetailLoading(false);
     }
   }
 
@@ -55,10 +75,24 @@ export default function TaskHistoryModal({ open, server, onClose }) {
                     {item.result_code ? <div className="small">代码：{item.result_code}</div> : null}
                   </div>
                   <div className="toolbarGroup">
-                    <button className="pageBtn" type="button" onClick={() => loadDetail(item.task_id)}>详情</button>
+                    <button className="pageBtn" type="button" onClick={() => loadDetail(item.task_id)} disabled={detailLoading && activeTaskId === item.task_id}>
+                      {detailLoading && activeTaskId === item.task_id ? '加载中...' : '详情'}
+                    </button>
                   </div>
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {detailLoading ? (
+            <div className="drawerSection">
+              <div className="small">正在加载任务详情...</div>
+            </div>
+          ) : null}
+
+          {detailError ? (
+            <div className="drawerSection">
+              <div className="small" style={{ color: '#b42318' }}>{detailError}</div>
             </div>
           ) : null}
 
