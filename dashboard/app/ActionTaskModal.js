@@ -1,42 +1,47 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
-
-const ACTION_OPTIONS = [
-  { key: 'update_xcore', label: '升级 xcore' },
-  { key: 'restart_xagent', label: '重启 xagent' },
-  { key: 'restart_xbridge', label: '重启 xbridge' },
-  { key: 'install_ixvpn', label: '安装 ixvpn' },
-  { key: 'install_xnftables', label: '安装 xnftables' },
-];
+import { useEffect, useMemo, useState } from 'react';
 
 export default function ActionTaskModal({ open, server, onClose, onCreated }) {
-  const [actionKey, setActionKey] = useState('update_xcore');
+  const [definitions, setDefinitions] = useState([]);
+  const [loadingDefs, setLoadingDefs] = useState(false);
+  const [actionKey, setActionKey] = useState('');
   const [form, setForm] = useState({ server_id: '', xagent_download_url: '', server_ip: '', download_url: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!server) return;
-    setForm({
-      server_id: server.instance_id || '',
-      xagent_download_url: '',
-      server_ip: server.ip || '',
-      download_url: '',
-    });
-  }, [server]);
+    if (!server || !open) return;
+    setForm({ server_id: server.instance_id || '', xagent_download_url: '', server_ip: server.ip || '', download_url: '' });
+  }, [server, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoadingDefs(true);
+    fetch('/api/proxy/actions/definitions', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setDefinitions(list);
+        if (list.length && !actionKey) setActionKey(list[0].action_key);
+      })
+      .catch(() => setDefinitions([]))
+      .finally(() => setLoadingDefs(false));
+  }, [open]);
+
+  const currentDef = useMemo(() => definitions.find((x) => x.action_key === actionKey) || null, [definitions, actionKey]);
 
   const fields = useMemo(() => {
     if (actionKey === 'install_ixvpn') {
       return [
-        { key: 'server_id', label: '业务 server_id', placeholder: '例如 1015' },
+        { key: 'server_id', label: '业务 server_id', placeholder: '例如 1018' },
         { key: 'xagent_download_url', label: 'xagent 下载地址', placeholder: 'https://...' },
         { key: 'server_ip', label: '服务器 IP', placeholder: '例如 1.2.3.4' },
       ];
     }
     if (actionKey === 'install_xnftables') {
       return [
-        { key: 'server_id', label: '业务 server_id', placeholder: '例如 1015' },
+        { key: 'server_id', label: '业务 server_id', placeholder: '例如 1018' },
         { key: 'download_url', label: 'bridge 下载地址', placeholder: 'https://...' },
       ];
     }
@@ -79,12 +84,29 @@ export default function ActionTaskModal({ open, server, onClose, onCreated }) {
   return (
     <div className="drawerOverlay" onClick={onClose}>
       <div className="modalCard largeModal" onClick={(e) => e.stopPropagation()}>
-        <div className="drawerHeader"><div><div className="drawerTitle">执行任务</div><div className="drawerSub">{server.ip || server.server_id}</div></div><button className="iconButton" type="button" onClick={onClose}>×</button></div>
+        <div className="drawerHeader">
+          <div>
+            <div className="drawerTitle">执行任务</div>
+            <div className="drawerSub">{server.ip || server.server_id}</div>
+          </div>
+          <button className="iconButton" type="button" onClick={onClose}>×</button>
+        </div>
         <div className="modalBody">
           <label className="fieldLabel">动作类型</label>
-          <select className="select fullInput" value={actionKey} onChange={(e) => setActionKey(e.target.value)}>
-            {ACTION_OPTIONS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+          <select className="select fullInput" value={actionKey} onChange={(e) => setActionKey(e.target.value)} disabled={loadingDefs}>
+            {definitions.map((item) => (
+              <option key={item.action_key} value={item.action_key}>
+                {item.display_name || item.name}
+              </option>
+            ))}
           </select>
+          {currentDef ? (
+            <div className="small" style={{ lineHeight: 1.6 }}>
+              分类：{currentDef.category || '-'} · 风险：{currentDef.risk_level || '-'} · 执行器：{currentDef.executor_type || '-'}
+              <br />
+              {currentDef.description || ''}
+            </div>
+          ) : null}
           {fields.map((field) => (
             <div key={field.key} style={{ marginTop: 12 }}>
               <label className="fieldLabel">{field.label}</label>
@@ -92,7 +114,10 @@ export default function ActionTaskModal({ open, server, onClose, onCreated }) {
             </div>
           ))}
           {error ? <div className="small" style={{ color: '#b42318', marginTop: 12 }}>{error}</div> : null}
-          <div className="modalActions"><button className="pageBtn" type="button" onClick={onClose} disabled={submitting}>取消</button><button className="primaryBtn" type="button" onClick={submit} disabled={submitting}>{submitting ? '提交中...' : '创建任务'}</button></div>
+          <div className="modalActions">
+            <button className="pageBtn" type="button" onClick={onClose} disabled={submitting}>取消</button>
+            <button className="primaryBtn" type="button" onClick={submit} disabled={submitting || !actionKey}>{submitting ? '提交中...' : '创建任务'}</button>
+          </div>
         </div>
       </div>
     </div>
