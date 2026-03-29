@@ -95,6 +95,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [rulesOpen, setRulesOpen] = useState(false);
   const [packageUploadOpen, setPackageUploadOpen] = useState(false);
   const [packageRepoOpen, setPackageRepoOpen] = useState(false);
+  const [packageRepoRefreshKey, setPackageRepoRefreshKey] = useState(0);
   const [rules, setRules] = useState(initialRules);
   const [toast, setToast] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -398,8 +399,8 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         }}
       />
       <TaskHistoryModal open={!!taskHistoryServer} server={taskHistoryServer} onClose={() => setTaskHistoryServer(null)} />
-      <PackageRepoModal open={packageRepoOpen} onClose={() => setPackageRepoOpen(false)} />
-      <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` })} />
+      <PackageRepoModal open={packageRepoOpen} refreshKey={packageRepoRefreshKey} onClose={() => setPackageRepoOpen(false)} />
+      <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => { setPackageRepoRefreshKey((x) => x + 1); setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` }); }} />
     </>
   );
 }

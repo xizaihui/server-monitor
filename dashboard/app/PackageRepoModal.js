@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export default function PackageRepoModal({ open, onClose }) {
+export default function PackageRepoModal({ open, refreshKey = 0, onClose }) {
   const [catalog, setCatalog] = useState([]);
   const [checksums, setChecksums] = useState({});
   const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ export default function PackageRepoModal({ open, onClose }) {
   useEffect(() => {
     if (!open) return;
     load();
-  }, [open]);
+  }, [open, refreshKey]);
 
   if (!open) return null;
 
@@ -60,7 +60,7 @@ export default function PackageRepoModal({ open, onClose }) {
         <div className="drawerHeader">
           <div>
             <div className="drawerTitle">包仓库</div>
-            <div className="drawerSub">stable / releases / checksum 总览与切换</div>
+            <div className="drawerSub">stable / latest / releases / checksum 总览与切换</div>
           </div>
           <button className="iconButton" type="button" onClick={onClose}>×</button>
         </div>
@@ -74,12 +74,12 @@ export default function PackageRepoModal({ open, onClose }) {
                 const latest = item.latest || item.releases?.[0] || '';
                 const hasDraft = !!item.hasUnpublished;
                 return (
-                  <div key={item.name} className="groupItem" style={{ alignItems: 'flex-start' }}>
+                  <div key={item.name} className="groupItem" style={{ alignItems: 'flex-start', borderColor: hasDraft ? '#fed7aa' : '#eef0f2', background: hasDraft ? '#fffaf2' : '#fafafa' }}>
                     <div style={{ minWidth: 0, width: '100%' }}>
                       <div className="groupTitle">{item.name}</div>
                       <div className="small">stable：{item.stable || '-'}</div>
                       <div className="small">latest：{latest || '-'}</div>
-                      <div className="small">发布状态：{hasDraft ? '有未发布 release' : 'stable 已是最新'}</div>
+                      <div className="small" style={{ color: hasDraft ? '#b45309' : undefined }}>发布状态：{hasDraft ? '有未发布 release' : 'stable 已是最新'}</div>
                       <div className="small">md5：{c?.md5 || '-'}</div>
                       <div className="small">sha256：{c?.sha256 || '-'}</div>
                       <div className="toolbarGroup" style={{ marginTop: 8 }}>
