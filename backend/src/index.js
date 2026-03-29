@@ -216,11 +216,29 @@ app.get('/api/packages/catalog', authMiddleware, (req, res) => {
       try { stableTarget = fs.readlinkSync(stable); } catch {}
       const releasesDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases');
       const releases = fs.existsSync(releasesDir) ? fs.readdirSync(releasesDir).sort().reverse() : [];
-      return { name, stable: stableTarget, releases };
+      return { name, stable: stableTarget.replace(/^\.\.\/releases\//, ''), releases };
     });
     res.json(catalog);
   } catch (error) {
     res.status(500).json({ error: error.message || 'catalog failed' });
+  }
+});
+app.post('/api/packages/:name/stable', authMiddleware, (req, res) => {
+  try {
+    const name = String(req.params.name || '').trim();
+    const release = String(req.body?.release || '').trim();
+    if (!['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'].includes(name)) return res.status(400).json({ error: 'invalid package name' });
+    if (!release) return res.status(400).json({ error: 'release required' });
+    const releaseDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases', release);
+    if (!fs.existsSync(releaseDir)) return res.status(404).json({ error: 'release not found' });
+    const stableDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable');
+    fs.mkdirSync(stableDir, { recursive: true });
+    const stableLink = path.join(stableDir, 'current');
+    try { fs.rmSync(stableLink, { force: true, recursive: true }); } catch {}
+    fs.symlinkSync(`../releases/${release}`, stableLink);
+    return res.json({ ok: true, name, stable: release });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'switch stable failed' });
   }
 });
 app.get('/api/packages/md5', authMiddleware, (req, res) => {
