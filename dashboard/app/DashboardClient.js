@@ -278,7 +278,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           <select className="select compactSelect" value={pageSize} onChange={(e) => onChangePageSize(e.target.value)}>
             {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
-          <span>脚本基线 {CURRENT_OPS_VERSION}</span>
+          <span>脚本目标版本 {CURRENT_OPS_VERSION}</span>
           <span>共 {filtered.length} 台</span>
         </div>
       </section>
@@ -400,7 +400,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       />
       <TaskHistoryModal open={!!taskHistoryServer} server={taskHistoryServer} onClose={() => setTaskHistoryServer(null)} />
       <PackageRepoModal open={packageRepoOpen} refreshKey={packageRepoRefreshKey} onClose={() => setPackageRepoOpen(false)} />
-      <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => { setPackageRepoRefreshKey((x) => x + 1); setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` }); }} />
+      <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => { setPackageRepoRefreshKey((x) => x + 1); setPackageRepoOpen(true); setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` }); }} />
     </>
   );
 }
