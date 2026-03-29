@@ -58,9 +58,9 @@ function scriptsBadge(server) {
 
 function readinessBadge(server) {
   const scriptsVersion = server?.metadata?.ops_scripts_version || '';
-  if (!scriptsVersion) return { text: '待初始化', tone: 'offline' };
-  if (scriptsVersion !== CURRENT_OPS_VERSION) return { text: '待更新', tone: 'problem' };
-  return { text: '可执行动作', tone: 'healthy' };
+  if (!scriptsVersion) return { text: '待初始化', tone: 'offline', rank: 0 };
+  if (scriptsVersion !== CURRENT_OPS_VERSION) return { text: '待更新', tone: 'problem', rank: 1 };
+  return { text: '可执行动作', tone: 'healthy', rank: 2 };
 }
 
 function targetGap(server) {
@@ -68,6 +68,13 @@ function targetGap(server) {
   if (!scriptsVersion) return '未达到目标';
   if (scriptsVersion !== CURRENT_OPS_VERSION) return `目标 ${CURRENT_OPS_VERSION}`;
   return '已对齐目标';
+}
+
+function readinessFilter(status, server) {
+  const rb = readinessBadge(server);
+  if (status === 'scripts_missing') return rb.rank === 0;
+  if (status === 'scripts_outdated') return rb.rank === 1;
+  return server.status === status;
 }
 
 export default function DashboardClient({ servers: initialServers, groups, selectedGroup = 'ALL', initialRules }) {
@@ -166,13 +173,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   }), [servers]);
 
   const filtered = useMemo(() => servers.filter((s) => {
-    const matchesStatus = status === 'ALL'
-      ? true
-      : status === 'scripts_missing'
-        ? !s.metadata?.ops_scripts_version
-        : status === 'scripts_outdated'
-          ? !!s.metadata?.ops_scripts_version && s.metadata?.ops_scripts_version !== CURRENT_OPS_VERSION
-          : s.status === status;
+    const matchesStatus = status === 'ALL' ? true : readinessFilter(status, s);
     const q = query.trim().toLowerCase();
     const matchesQuery = !q ? true : [s.ip, s.instance_id, s.display_name, s.hostname, s.group_name, s.server_id, s.metadata?.agent_version, s.metadata?.ops_scripts_version]
       .filter(Boolean)

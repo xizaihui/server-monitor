@@ -71,8 +71,8 @@ export default function PackageRepoModal({ open, onClose }) {
             <div className="groupList">
               {catalog.map((item) => {
                 const c = checksumMap[item.name];
-                const latest = item.releases?.[0] || '';
-                const hasDraft = latest && item.stable && latest !== item.stable;
+                const latest = item.latest || item.releases?.[0] || '';
+                const hasDraft = !!item.hasUnpublished;
                 return (
                   <div key={item.name} className="groupItem" style={{ alignItems: 'flex-start' }}>
                     <div style={{ minWidth: 0, width: '100%' }}>

@@ -214,9 +214,11 @@ app.get('/api/packages/catalog', authMiddleware, (req, res) => {
       const stable = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable', 'current');
       let stableTarget = '';
       try { stableTarget = fs.readlinkSync(stable); } catch {}
+      const stableVersion = stableTarget.replace(/^\.\.\/releases\//, '');
       const releasesDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases');
       const releases = fs.existsSync(releasesDir) ? fs.readdirSync(releasesDir).sort().reverse() : [];
-      return { name, stable: stableTarget.replace(/^\.\.\/releases\//, ''), releases };
+      const latest = releases[0] || '';
+      return { name, stable: stableVersion, latest, releases, hasUnpublished: !!latest && !!stableVersion && latest !== stableVersion };
     });
     res.json(catalog);
   } catch (error) {
