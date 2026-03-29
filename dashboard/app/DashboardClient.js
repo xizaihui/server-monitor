@@ -9,6 +9,7 @@ import BulkMoveModal from './BulkMoveModal';
 import MonitorRulesModal from './MonitorRulesModal';
 import ActionTaskModal from './ActionTaskModal';
 import TaskHistoryModal from './TaskHistoryModal';
+import PackageUploadModal from './PackageUploadModal';
 
 function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -60,6 +61,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [packageUploadOpen, setPackageUploadOpen] = useState(false);
   const [rules, setRules] = useState(initialRules);
   const [toast, setToast] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -235,6 +237,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           </div>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setGroupManagerOpen(true)}>分类管理</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setRulesOpen(true)}>监控规则</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageUploadOpen(true)}>上传安装包</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={refreshNow}>立即刷新</button>
         </div>
         <div className="toolbarGroup small liveInfo">
@@ -354,6 +357,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         }}
       />
       <TaskHistoryModal open={!!taskHistoryServer} server={taskHistoryServer} onClose={() => setTaskHistoryServer(null)} />
+      <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => setToast({ type: 'success', text: `上传成功：${data.url || data.path || ''}` })} />
     </>
   );
 }

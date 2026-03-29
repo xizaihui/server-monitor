@@ -13,6 +13,8 @@ const DB_PATH = path.join(DATA_DIR, 'monitor.db');
 const OFFLINE_AFTER_SECONDS = Number(process.env.OFFLINE_AFTER_SECONDS || 180);
 const METRICS_RETENTION_DAYS = Number(process.env.METRICS_RETENTION_DAYS || 30);
 const DEFAULT_GROUP = '未分组';
+const DOWNLOAD_BASE_URL = process.env.DOWNLOAD_BASE_URL || 'http://43.165.172.3/downloads';
+const DOWNLOAD_ROOT = process.env.DOWNLOAD_ROOT || '/var/www/server-monitor-downloads';
 const DEFAULT_RULES = {
   cpu: { enabled: true, threshold: 85, consecutive: 1 },
   memory: { enabled: true, threshold: 90, consecutive: 1 },
@@ -45,27 +47,27 @@ const DEFAULT_ACTION_DEFINITIONS = [
     action_key: 'update_xcore', name: '升级 xcore', display_name: '升级 xcore', category: 'update', description: '增量更新 xcore',
     script_path: '/opt/core-service/scripts/update_xcore.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn']),
     risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xcore.zip' })
+    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xcore/xcore.zip` })
   },
   {
     action_key: 'install_ixvpn', name: '安装 ixvpn', display_name: '安装 ixvpn', category: 'install', description: '安装/重建 ixvpn + xagent',
     script_path: '/opt/core-service/scripts/install_ixvpn.sh',
     param_schema: JSON.stringify({ required: ['server_id', 'xagent_download_url', 'server_ip'], properties: { server_id: { type: 'string', maxLength: 128 }, xagent_download_url: { type: 'string', format: 'url' }, server_ip: { type: 'string', format: 'ipv4' } } }),
     role_scope: JSON.stringify(['ixvpn']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xagent-server.zip' })
+    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/ixvpn/xagent-server.zip` })
   },
   {
     action_key: 'install_xnftables', name: '安装 xnftables', display_name: '安装 xnftables', category: 'install', description: '安装/重建 xvpn-bridge-server',
     script_path: '/opt/core-service/scripts/install_xnftables.sh',
     param_schema: JSON.stringify({ required: ['server_id', 'download_url'], properties: { server_id: { type: 'string', maxLength: 128 }, download_url: { type: 'string', format: 'url' } } }),
     role_scope: JSON.stringify(['xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8789_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xbrigde-server.zip' })
+    trigger_faults: JSON.stringify(['port_8789_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xbridge/xbridge-server.zip` })
   },
   {
     action_key: 'install_redis', name: '安装 redis', display_name: '安装 redis', category: 'install', description: '在线安装 redis 并校验 6379 端口',
     script_path: '/opt/core-service/scripts/install_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn', 'redis']),
     risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_6379_down', 'component_missing']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'restart_redis', priority: 100, metadata: JSON.stringify({ install_url: 'http://38.75.137.157:8080/directlink/1/install_redis.sh' })
+    trigger_faults: JSON.stringify(['port_6379_down', 'component_missing']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'restart_redis', priority: 100, metadata: JSON.stringify({ install_url: `${DOWNLOAD_BASE_URL}/packages/redis/install_redis.sh` })
   },
   {
     action_key: 'apply_cert', name: '申请证书', display_name: '申请证书', category: 'repair', description: '生成自签名证书并检查证书文件',
@@ -130,6 +132,12 @@ setInterval(cleanupExpiredActionTasks, 15000);
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'agents'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'ixvpn'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xbridge'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xcore'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'redis'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'misc'), { recursive: true });
 const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN || '';
 function authMiddleware(req, res, next) { if (!DASHBOARD_TOKEN) return next(); const auth = req.headers.authorization || ''; const cookie = req.headers.cookie || ''; const tokenFromHeader = auth.startsWith('Bearer ') ? auth.slice(7) : ''; const tokenFromCookie = (cookie.match(/dashboard_token=([^;]+)/) || [])[1] || ''; const tokenFromQuery = req.query?.token || ''; if (tokenFromHeader === DASHBOARD_TOKEN || tokenFromCookie === DASHBOARD_TOKEN || tokenFromQuery === DASHBOARD_TOKEN) return next(); return res.status(401).json({ error: 'unauthorized' }); }
 function checkMetricConsecutive(serverId, column, predicate, consecutive) { const rows = db.prepare(`SELECT ${column} AS value FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT ?`).all(serverId, consecutive); if (rows.length < consecutive) return false; return rows.every((row) => predicate(Number(row.value || 0))); }
@@ -175,6 +183,49 @@ app.get('/api/settings/monitor-rules', authMiddleware, (req, res) => res.json(ge
 app.patch('/api/settings/monitor-rules', authMiddleware, (req, res) => { const body = req.body || {}; const nextRules = Object.fromEntries(Object.entries(DEFAULT_RULES).map(([key, val]) => [key, { ...val, ...(body[key] || {}) }])); db.prepare(`UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'monitor_rules'`).run(JSON.stringify(nextRules)); res.json({ ok: true, rules: nextRules }); });
 app.get('/api/actions/definitions', authMiddleware, (req, res) => { const rows = db.prepare(`SELECT action_key, name, display_name, category, description, param_schema, role_scope, risk_level, timeout_seconds, executor_type, cooldown_seconds, max_retries, auto_enabled, requires_approval, batch_enabled, trigger_faults, success_criteria, fallback_action_key, priority, metadata FROM action_definitions WHERE enabled = 1 ORDER BY priority ASC, id ASC`).all(); res.json(rows.map((row) => ({ ...row, role_scope: JSON.parse(row.role_scope || '[]'), param_schema: JSON.parse(row.param_schema || '{}'), trigger_faults: JSON.parse(row.trigger_faults || '[]'), success_criteria: JSON.parse(row.success_criteria || '{}'), metadata: JSON.parse(row.metadata || '{}') }))); });
 app.get('/api/incidents', authMiddleware, (req, res) => { const { status, server_id, limit } = req.query || {}; const where = []; const params = []; if (status) { where.push('status = ?'); params.push(status); } if (server_id) { where.push('server_id = ?'); params.push(server_id); } const sql = `SELECT * FROM incidents ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY last_seen_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200))); res.json(db.prepare(sql).all(...params)); });
+app.post('/api/uploads/packages', authMiddleware, (req, res) => {
+  const contentType = String(req.headers['content-type'] || '');
+  const match = contentType.match(/boundary=(.+)$/);
+  if (!match) return res.status(400).json({ error: 'multipart boundary missing' });
+  const chunks = [];
+  req.on('data', (chunk) => chunks.push(chunk));
+  req.on('end', () => {
+    try {
+      const buffer = Buffer.concat(chunks);
+      const boundary = Buffer.from(`--${match[1]}`);
+      const parts = buffer.toString('binary').split(boundary.toString('binary')).filter((part) => part.includes('Content-Disposition'));
+      let folder = 'packages/misc';
+      let fileName = '';
+      let fileBuffer = null;
+      for (const part of parts) {
+        const [rawHeaders, rawBody] = part.split('\r\n\r\n');
+        if (!rawHeaders || !rawBody) continue;
+        const disposition = rawHeaders.match(/name="([^"]+)"(?:; filename="([^"]+)")?/);
+        if (!disposition) continue;
+        const fieldName = disposition[1];
+        const originalName = disposition[2];
+        const bodyBinary = rawBody.replace(/\r\n--$/, '').replace(/\r\n$/, '');
+        if (fieldName === 'folder') {
+          folder = bodyBinary.trim().replace(/^\/+/, '').replace(/\.\./g, '');
+        }
+        if (fieldName === 'file' && originalName) {
+          fileName = path.basename(originalName).replace(/[^a-zA-Z0-9._-]/g, '_');
+          fileBuffer = Buffer.from(bodyBinary, 'binary');
+        }
+      }
+      if (!fileName || !fileBuffer) return res.status(400).json({ error: 'file missing' });
+      if (!folder.startsWith('packages/')) folder = 'packages/misc';
+      const targetDir = path.join(DOWNLOAD_ROOT, folder);
+      fs.mkdirSync(targetDir, { recursive: true });
+      const targetPath = path.join(targetDir, fileName);
+      fs.writeFileSync(targetPath, fileBuffer);
+      fs.chmodSync(targetPath, 0o644);
+      return res.json({ ok: true, file_name: fileName, path: targetPath, url: `${DOWNLOAD_BASE_URL}/${folder}/${fileName}` });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'upload failed' });
+    }
+  });
+});
 app.post('/api/agent/register', (req, res) => { const body = req.body || {}, serverId = body.server_id; if (!serverId) return res.status(400).json({ error: 'server_id required' }); ensureGroup.run(DEFAULT_GROUP, 0); const now = new Date().toISOString(); const existing = db.prepare(`SELECT id FROM servers WHERE server_id = ?`).get(serverId); const sameHostOffline = db.prepare(`SELECT id, server_id FROM servers WHERE hostname = ? AND server_id <> ? ORDER BY last_seen DESC, id DESC LIMIT 1`).get(body.hostname || '', serverId); if (!existing && sameHostOffline) { db.prepare(`UPDATE metrics SET server_id = ? WHERE server_id = ?`).run(serverId, sameHostOffline.server_id); db.prepare(`UPDATE servers SET server_id = ?, hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE id = ?`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, sameHostOffline.id); } else if (!existing) { const result = db.prepare(`INSERT INTO servers (server_id, hostname, display_name, ip, instance_id, os, arch, group_name, tags, metadata, status, issue_count, stable_order, last_seen, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'healthy', 0, NULL, ?, ?)`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', DEFAULT_GROUP, JSON.stringify(body.tags || []), JSON.stringify(body.metadata || {}), now, now); db.prepare(`UPDATE servers SET stable_order = id WHERE id = ?`).run(result.lastInsertRowid); } else { db.prepare(`UPDATE servers SET hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE server_id = ?`).run(body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, serverId); } db.prepare(`INSERT INTO metrics (server_id, cpu_usage, memory_usage, memory_used, memory_total, disk_usage, disk_used, disk_total, port_443, port_6379, port_8888, port_8789, issues) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`).run(serverId, Number(body.cpu_usage || 0), Number(body.memory_usage || 0), Number(body.memory_used || 0), Number(body.memory_total || 0), Number(body.disk_usage || 0), Number(body.disk_used || 0), Number(body.disk_total || 0), body.ports?.['443'] ? 1 : 0, body.ports?.['6379'] ? 1 : 0, body.ports?.['8888'] ? 1 : 0, body.ports?.['8789'] ? 1 : 0); const derived = calculateStatus(body); db.prepare(`UPDATE servers SET status = ?, issue_count = ?, updated_at = ? WHERE server_id = ?`).run(derived.status, derived.issue_count, now, serverId); db.prepare(`UPDATE metrics SET issues = ? WHERE id = (SELECT id FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT 1)`).run(JSON.stringify(derived.issues), serverId); upsertIncidentsForServer(serverId, derived.status, derived.issues, { ip: body.ip || '', hostname: body.hostname || '', instance_id: body.instance_id || '' }); res.json({ ok: true, status: derived.status, issues: derived.issues, assigned_group: DEFAULT_GROUP }); });
 app.post('/api/actions/tasks', authMiddleware, (req, res) => { const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const actionKey = String(body.action_key || '').trim(); const params = body.params || {}; const source = String(body.source || 'dashboard'); const createdBy = String(body.created_by || 'dashboard'); if (!serverId || !actionKey) return res.status(400).json({ error: 'server_id and action_key required' }); const def = db.prepare(`SELECT * FROM action_definitions WHERE action_key = ? AND enabled = 1`).get(actionKey); if (!def) return res.status(404).json({ error: 'action definition not found' }); const activeTask = db.prepare(`SELECT task_id, status FROM action_tasks WHERE server_id = ? AND status IN ('pending', 'leased', 'running') ORDER BY created_at ASC LIMIT 1`).get(serverId); if (activeTask) return res.status(409).json({ error: 'server already has active task', activeTask }); const v = validateParams(def, params); if (!v.ok) return res.status(400).json({ error: v.error }); const taskId = genTaskId(); db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, '{}')`).run(taskId, serverId, actionKey, JSON.stringify(params), source, createdBy, Number(def.priority || 100), Number(def.timeout_seconds || 300)); return res.json({ ok: true, task: { task_id: taskId, status: 'pending' } }); });
 app.get('/api/actions/tasks', authMiddleware, (req, res) => { const { server_id, status, action_key, limit } = req.query || {}; const where = []; const params = []; if (server_id) { where.push(`server_id = ?`); params.push(server_id); } if (status) { where.push(`status = ?`); params.push(status); } if (action_key) { where.push(`action_key = ?`); params.push(action_key); } const sql = `SELECT * FROM action_tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200))); res.json(db.prepare(sql).all(...params)); });
