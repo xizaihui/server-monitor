@@ -39,5 +39,11 @@
 - API 默认端口：`8080`
 - Dashboard 默认端口：`3000`
 
+## 运行环境
+- 推荐 Node.js：`22.x`
+- Go：`1.22.x`
+
+> 说明：backend 依赖 `better-sqlite3` 原生模块。若 Node.js 大版本发生变化，需在 `backend/` 下执行 `npm rebuild better-sqlite3 --build-from-source`，否则 backend 可能因 ABI 不匹配而启动失败。
+
 ## 快速启动
 详见各目录下说明。

@@ -13,7 +13,7 @@ apt-get update
 apt-get install -y curl ca-certificates gnupg nginx tar build-essential
 
 if ! command -v node >/dev/null 2>&1; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
 fi
 
@@ -51,6 +51,7 @@ Type=simple
 WorkingDirectory=/opt/server-monitor/backend
 Environment=PORT=8080
 Environment=DATA_DIR=/opt/server-monitor/backend/data
+ExecStartPre=/usr/bin/bash -lc 'cd /opt/server-monitor/backend && /usr/bin/npm rebuild better-sqlite3 --build-from-source >/var/log/server-monitor-backend-rebuild.log 2>&1 || /usr/bin/npm install >/var/log/server-monitor-backend-rebuild.log 2>&1'
 ExecStart=/usr/bin/node /opt/server-monitor/backend/src/index.js
 Restart=always
 RestartSec=3
@@ -64,13 +65,14 @@ cat >/etc/systemd/system/server-monitor-dashboard.service <<'EOF'
 [Unit]
 Description=Server Monitor Dashboard
 After=network.target server-monitor-backend.service
+Requires=server-monitor-backend.service
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/server-monitor/dashboard
 Environment=PORT=3000
 Environment=NEXT_PUBLIC_API_BASE=http://127.0.0.1:8080
-ExecStart=/usr/bin/npm run start
+ExecStart=/usr/bin/node /opt/server-monitor/dashboard/.next/standalone/server.js
 Restart=always
 RestartSec=3
 User=root
