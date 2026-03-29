@@ -71,11 +71,15 @@ export default function PackageRepoModal({ open, onClose }) {
             <div className="groupList">
               {catalog.map((item) => {
                 const c = checksumMap[item.name];
+                const latest = item.releases?.[0] || '';
+                const hasDraft = latest && item.stable && latest !== item.stable;
                 return (
                   <div key={item.name} className="groupItem" style={{ alignItems: 'flex-start' }}>
                     <div style={{ minWidth: 0, width: '100%' }}>
                       <div className="groupTitle">{item.name}</div>
                       <div className="small">stable：{item.stable || '-'}</div>
+                      <div className="small">latest：{latest || '-'}</div>
+                      <div className="small">发布状态：{hasDraft ? '有未发布 release' : 'stable 已是最新'}</div>
                       <div className="small">md5：{c?.md5 || '-'}</div>
                       <div className="small">sha256：{c?.sha256 || '-'}</div>
                       <div className="toolbarGroup" style={{ marginTop: 8 }}>
@@ -83,11 +87,14 @@ export default function PackageRepoModal({ open, onClose }) {
                       </div>
                       <div className="small" style={{ marginTop: 8 }}>releases：</div>
                       <div className="toolbarGroup" style={{ marginTop: 6 }}>
-                        {(item.releases || []).map((release) => (
-                          <button key={release} className={`pageBtn ${item.stable === release ? 'activePageBtn' : ''}`} type="button" onClick={() => switchStable(item.name, release)} disabled={busy === `${item.name}:${release}`}>
-                            {busy === `${item.name}:${release}` ? '切换中...' : release}
-                          </button>
-                        ))}
+                        {(item.releases || []).map((release) => {
+                          const label = item.stable === release ? `${release} · stable` : latest === release ? `${release} · latest` : release;
+                          return (
+                            <button key={release} className={`pageBtn ${item.stable === release ? 'activePageBtn' : ''}`} type="button" onClick={() => switchStable(item.name, release)} disabled={busy === `${item.name}:${release}`}>
+                              {busy === `${item.name}:${release}` ? '切换中...' : label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

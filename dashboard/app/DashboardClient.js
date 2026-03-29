@@ -63,6 +63,13 @@ function readinessBadge(server) {
   return { text: '可执行动作', tone: 'healthy' };
 }
 
+function targetGap(server) {
+  const scriptsVersion = server?.metadata?.ops_scripts_version || '';
+  if (!scriptsVersion) return '未达到目标';
+  if (scriptsVersion !== CURRENT_OPS_VERSION) return `目标 ${CURRENT_OPS_VERSION}`;
+  return '已对齐目标';
+}
+
 export default function DashboardClient({ servers: initialServers, groups, selectedGroup = 'ALL', initialRules }) {
   const [servers, setServers] = useState(initialServers.filter((x) => x.ip !== '127.0.0.2' && x.server_id !== 'manual-test-node'));
   const [query, setQuery] = useState('');
@@ -332,6 +339,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
                     <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span></div>
+                    <div className="small versionSubline">{targetGap(s)}</div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
                   <td>
@@ -390,7 +398,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       />
       <TaskHistoryModal open={!!taskHistoryServer} server={taskHistoryServer} onClose={() => setTaskHistoryServer(null)} />
       <PackageRepoModal open={packageRepoOpen} onClose={() => setPackageRepoOpen(false)} />
-      <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => setToast({ type: 'success', text: `上传成功：${data.url || data.path || ''}` })} />
+      <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` })} />
     </>
   );
 }
