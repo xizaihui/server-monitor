@@ -42,9 +42,9 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
       ...prev,
       server_id: seed?.instance_id || prev.server_id || '',
       server_ip: seed?.ip || prev.server_ip || '',
-      xagent_download_url: actionKey === 'install_ixvpn' ? (prev.xagent_download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xagent/xagent-server.zip') : prev.xagent_download_url,
-      download_url: actionKey === 'install_xnftables' ? (prev.download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xbridge/xbridge-server.zip') : prev.download_url,
-      ops_scripts_url: actionKey === 'init_ops_scripts' ? (prev.ops_scripts_url || meta.ops_scripts_url || 'http://43.165.172.3/downloads/packages/ops/ops-scripts.zip') : prev.ops_scripts_url,
+      xagent_download_url: actionKey === 'install_ixvpn' ? (prev.xagent_download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xagent/stable/current/xagent-server.zip') : prev.xagent_download_url,
+      download_url: actionKey === 'install_xnftables' ? (prev.download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xbridge/stable/current/xbridge-server.zip') : prev.download_url,
+      ops_scripts_url: actionKey === 'init_ops_scripts' ? (prev.ops_scripts_url || meta.ops_scripts_url || 'http://43.165.172.3/downloads/packages/ops/stable/current/ops-scripts.zip') : prev.ops_scripts_url,
     }));
   }, [open, singleServer, targetServers, currentDef, actionKey]);
 
@@ -52,14 +52,14 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
     if (actionKey === 'install_ixvpn') {
       return [
         { key: 'server_id', label: isBulk ? '业务 server_id（批量默认值，可按需统一下发）' : '业务 server_id', placeholder: '例如 1018' },
-        { key: 'xagent_download_url', label: 'xagent 安装包地址', placeholder: 'http://43.165.172.3/downloads/packages/xagent/xagent-server.zip' },
+        { key: 'xagent_download_url', label: 'xagent 安装包地址', placeholder: 'http://43.165.172.3/downloads/packages/xagent/stable/current/xagent-server.zip' },
         { key: 'server_ip', label: isBulk ? '服务器 IP（批量时建议逐节点单独使用）' : '服务器 IP', placeholder: '例如 1.2.3.4' },
       ];
     }
     if (actionKey === 'install_xnftables') {
       return [
         { key: 'server_id', label: '业务 server_id', placeholder: '例如 1018' },
-        { key: 'download_url', label: 'bridge 安装包地址', placeholder: 'http://43.165.172.3/downloads/packages/xbridge/xbridge-server.zip' },
+        { key: 'download_url', label: 'bridge 安装包地址', placeholder: 'http://43.165.172.3/downloads/packages/xbridge/stable/current/xbridge-server.zip' },
       ];
     }
     if (actionKey === 'apply_cert') {
@@ -69,7 +69,7 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
     }
     if (actionKey === 'init_ops_scripts') {
       return [
-        { key: 'ops_scripts_url', label: '脚本包地址', placeholder: 'http://43.165.172.3/downloads/packages/ops/ops-scripts.zip' },
+        { key: 'ops_scripts_url', label: '脚本包地址', placeholder: 'http://43.165.172.3/downloads/packages/ops/stable/current/ops-scripts.zip' },
       ];
     }
     return [];

@@ -45,6 +45,15 @@ export default function PackageRepoModal({ open, onClose }) {
     load();
   }
 
+  async function rollback(name) {
+    setBusy(`${name}:rollback`);
+    await fetch(`/api/proxy/packages/${name}/rollback`, {
+      method: 'POST'
+    });
+    setBusy('');
+    load();
+  }
+
   return (
     <div className="drawerOverlay" onClick={onClose}>
       <div className="modalCard largeModal" onClick={(e) => e.stopPropagation()}>
@@ -69,6 +78,9 @@ export default function PackageRepoModal({ open, onClose }) {
                       <div className="small">stable：{item.stable || '-'}</div>
                       <div className="small">md5：{c?.md5 || '-'}</div>
                       <div className="small">sha256：{c?.sha256 || '-'}</div>
+                      <div className="toolbarGroup" style={{ marginTop: 8 }}>
+                        <button className="pageBtn" type="button" onClick={() => rollback(item.name)} disabled={busy === `${item.name}:rollback`}>回滚到上一版</button>
+                      </div>
                       <div className="small" style={{ marginTop: 8 }}>releases：</div>
                       <div className="toolbarGroup" style={{ marginTop: 6 }}>
                         {(item.releases || []).map((release) => (

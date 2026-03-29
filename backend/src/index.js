@@ -48,27 +48,27 @@ const DEFAULT_ACTION_DEFINITIONS = [
     action_key: 'update_xcore', name: '更新 xcore 内核', display_name: '更新 xcore 内核', category: 'update', description: '增量更新 xcore 内核并重启 xagent 服务',
     script_path: '/opt/core-service/scripts/update_xcore.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
     risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xcore/xcore.zip`, restart_service: 'xagent.service' })
+    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xcore/stable/current/xcore.zip`, restart_service: 'xagent.service' })
   },
   {
     action_key: 'install_ixvpn', name: '安装 xagent', display_name: '安装 xagent', category: 'install', description: '安装/重建 xagent，并由 xagent 自动拉起 xcore 内核',
     script_path: '/opt/core-service/scripts/install_ixvpn.sh',
     param_schema: JSON.stringify({ required: ['server_id', 'xagent_download_url', 'server_ip'], properties: { server_id: { type: 'string', maxLength: 128 }, xagent_download_url: { type: 'string', format: 'url' }, server_ip: { type: 'string', format: 'ipv4' } } }),
     role_scope: JSON.stringify(['xagent']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xagent/xagent-server.zip` })
+    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xagent/stable/current/xagent-server.zip` })
   },
   {
     action_key: 'install_xnftables', name: '安装 xnftables', display_name: '安装 xnftables', category: 'install', description: '安装/重建 xvpn-bridge-server',
     script_path: '/opt/core-service/scripts/install_xnftables.sh',
     param_schema: JSON.stringify({ required: ['server_id', 'download_url'], properties: { server_id: { type: 'string', maxLength: 128 }, download_url: { type: 'string', format: 'url' } } }),
     role_scope: JSON.stringify(['xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8789_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xbridge/xbridge-server.zip` })
+    trigger_faults: JSON.stringify(['port_8789_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xbridge/stable/current/xbridge-server.zip` })
   },
   {
     action_key: 'install_redis', name: '安装 redis', display_name: '安装 redis', category: 'install', description: '在线安装 redis 并校验 6379 端口',
     script_path: '/opt/core-service/scripts/install_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent', 'redis']),
     risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_6379_down', 'component_missing']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'restart_redis', priority: 100, metadata: JSON.stringify({ install_url: `${DOWNLOAD_BASE_URL}/packages/redis/install_redis.sh` })
+    trigger_faults: JSON.stringify(['port_6379_down', 'component_missing']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'restart_redis', priority: 100, metadata: JSON.stringify({ install_url: `${DOWNLOAD_BASE_URL}/packages/redis/stable/current/install_redis.sh` })
   },
   {
     action_key: 'apply_cert', name: '申请证书', display_name: '申请证书', category: 'repair', description: '生成自签名证书并检查证书文件',
@@ -82,7 +82,7 @@ const DEFAULT_ACTION_DEFINITIONS = [
     script_path: '/opt/core-service/scripts/init_ops_scripts.sh',
     param_schema: JSON.stringify({ required: ['ops_scripts_url'], properties: { ops_scripts_url: { type: 'string', format: 'url' } } }),
     role_scope: JSON.stringify(['xagent', 'xbridge', 'redis']), risk_level: 'safe', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
-    trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/opt/core-service/scripts/restart_xagent.sh', '/opt/core-service/scripts/update_xcore.sh'] }), fallback_action_key: '', priority: 5, metadata: JSON.stringify({ ops_scripts_url: `${DOWNLOAD_BASE_URL}/packages/ops/ops-scripts.zip` })
+    trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/opt/core-service/scripts/restart_xagent.sh', '/opt/core-service/scripts/update_xcore.sh'] }), fallback_action_key: '', priority: 5, metadata: JSON.stringify({ ops_scripts_url: `${DOWNLOAD_BASE_URL}/packages/ops/stable/current/ops-scripts.zip` })
   }
 ];
 
@@ -223,22 +223,43 @@ app.get('/api/packages/catalog', authMiddleware, (req, res) => {
     res.status(500).json({ error: error.message || 'catalog failed' });
   }
 });
+function switchStableRelease(name, release) {
+  const releaseDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases', release);
+  if (!fs.existsSync(releaseDir)) throw new Error('release not found');
+  const stableDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable');
+  fs.mkdirSync(stableDir, { recursive: true });
+  const stableLink = path.join(stableDir, 'current');
+  try { fs.rmSync(stableLink, { force: true, recursive: true }); } catch {}
+  fs.symlinkSync(`../releases/${release}`, stableLink);
+}
 app.post('/api/packages/:name/stable', authMiddleware, (req, res) => {
   try {
     const name = String(req.params.name || '').trim();
     const release = String(req.body?.release || '').trim();
     if (!['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'].includes(name)) return res.status(400).json({ error: 'invalid package name' });
     if (!release) return res.status(400).json({ error: 'release required' });
-    const releaseDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases', release);
-    if (!fs.existsSync(releaseDir)) return res.status(404).json({ error: 'release not found' });
-    const stableDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable');
-    fs.mkdirSync(stableDir, { recursive: true });
-    const stableLink = path.join(stableDir, 'current');
-    try { fs.rmSync(stableLink, { force: true, recursive: true }); } catch {}
-    fs.symlinkSync(`../releases/${release}`, stableLink);
+    switchStableRelease(name, release);
     return res.json({ ok: true, name, stable: release });
   } catch (error) {
-    return res.status(500).json({ error: error.message || 'switch stable failed' });
+    return res.status(error.message === 'release not found' ? 404 : 500).json({ error: error.message || 'switch stable failed' });
+  }
+});
+app.post('/api/packages/:name/rollback', authMiddleware, (req, res) => {
+  try {
+    const name = String(req.params.name || '').trim();
+    if (!['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'].includes(name)) return res.status(400).json({ error: 'invalid package name' });
+    const releasesDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases');
+    const releases = fs.existsSync(releasesDir) ? fs.readdirSync(releasesDir).sort().reverse() : [];
+    const stable = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable', 'current');
+    let current = '';
+    try { current = fs.readlinkSync(stable).replace(/^\.\.\/releases\//, ''); } catch {}
+    const idx = releases.indexOf(current);
+    const target = idx >= 0 && releases[idx + 1] ? releases[idx + 1] : releases[1];
+    if (!target) return res.status(400).json({ error: 'no previous release' });
+    switchStableRelease(name, target);
+    return res.json({ ok: true, name, stable: target, previous: current });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'rollback failed' });
   }
 });
 app.get('/api/packages/md5', authMiddleware, (req, res) => {
