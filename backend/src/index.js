@@ -24,132 +24,48 @@ const DEFAULT_RULES = {
 };
 const DEFAULT_ACTION_DEFINITIONS = [
   {
-    action_key: 'restart_xagent',
-    name: '重启 xagent',
-    display_name: '重启 xagent',
-    category: 'safe',
-    description: '重启 xagent 服务并校验 8888 端口',
-    script_path: '/opt/core-service/scripts/restart_xagent.sh',
-    param_schema: JSON.stringify({ required: [], properties: {} }),
-    role_scope: JSON.stringify(['ixvpn']),
-    risk_level: 'safe',
-    timeout_seconds: 120,
-    executor_type: 'agent',
-    cooldown_seconds: 1800,
-    max_retries: 1,
-    auto_enabled: 1,
-    requires_approval: 0,
-    batch_enabled: 1,
-    trigger_faults: JSON.stringify(['port_8888_down', 'agent_heartbeat_timeout']),
-    success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }),
-    fallback_action_key: 'install_ixvpn',
-    priority: 10,
-    metadata: JSON.stringify({})
+    action_key: 'restart_xagent', name: '重启 xagent', display_name: '重启 xagent', category: 'safe', description: '重启 xagent 服务并校验 8888 端口',
+    script_path: '/opt/core-service/scripts/restart_xagent.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn']),
+    risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_8888_down', 'agent_heartbeat_timeout']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: 'install_ixvpn', priority: 10, metadata: JSON.stringify({})
   },
   {
-    action_key: 'restart_xbridge',
-    name: '重启 xbridge',
-    display_name: '重启 xbridge',
-    category: 'safe',
-    description: '重启 xvpn-bridge-server 服务并校验 8789 端口',
-    script_path: '/opt/core-service/scripts/restart_xbridge.sh',
-    param_schema: JSON.stringify({ required: [], properties: {} }),
-    role_scope: JSON.stringify(['xbridge']),
-    risk_level: 'safe',
-    timeout_seconds: 120,
-    executor_type: 'agent',
-    cooldown_seconds: 1800,
-    max_retries: 1,
-    auto_enabled: 1,
-    requires_approval: 0,
-    batch_enabled: 1,
-    trigger_faults: JSON.stringify(['port_8789_down']),
-    success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789] }),
-    fallback_action_key: 'install_xnftables',
-    priority: 10,
-    metadata: JSON.stringify({})
+    action_key: 'restart_xbridge', name: '重启 xbridge', display_name: '重启 xbridge', category: 'safe', description: '重启 xvpn-bridge-server 服务并校验 8789 端口',
+    script_path: '/opt/core-service/scripts/restart_xbridge.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xbridge']),
+    risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_8789_down']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789] }), fallback_action_key: 'install_xnftables', priority: 10, metadata: JSON.stringify({})
   },
   {
-    action_key: 'update_xcore',
-    name: '升级 xcore',
-    display_name: '升级 xcore',
-    category: 'update',
-    description: '增量更新 xcore',
-    script_path: '/opt/core-service/scripts/update_xcore.sh',
-    param_schema: JSON.stringify({ required: [], properties: {} }),
-    role_scope: JSON.stringify(['ixvpn']),
-    risk_level: 'guarded',
-    timeout_seconds: 300,
-    executor_type: 'agent',
-    cooldown_seconds: 3600,
-    max_retries: 1,
-    auto_enabled: 0,
-    requires_approval: 1,
-    batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_443_down']),
-    success_criteria: JSON.stringify({ ports_up: [443] }),
-    fallback_action_key: 'install_ixvpn',
-    priority: 20,
-    metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xcore.zip' })
+    action_key: 'restart_redis', name: '重启 redis', display_name: '重启 redis', category: 'safe', description: '重启 redis 服务并校验 6379 端口',
+    script_path: '/opt/core-service/scripts/restart_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn', 'redis']),
+    risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_6379_down']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'install_redis', priority: 10, metadata: JSON.stringify({})
   },
   {
-    action_key: 'install_ixvpn',
-    name: '安装 ixvpn',
-    display_name: '安装 ixvpn',
-    category: 'install',
-    description: '安装/重建 ixvpn + xagent',
+    action_key: 'update_xcore', name: '升级 xcore', display_name: '升级 xcore', category: 'update', description: '增量更新 xcore',
+    script_path: '/opt/core-service/scripts/update_xcore.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn']),
+    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xcore.zip' })
+  },
+  {
+    action_key: 'install_ixvpn', name: '安装 ixvpn', display_name: '安装 ixvpn', category: 'install', description: '安装/重建 ixvpn + xagent',
     script_path: '/opt/core-service/scripts/install_ixvpn.sh',
-    param_schema: JSON.stringify({
-      required: ['server_id', 'xagent_download_url', 'server_ip'],
-      properties: {
-        server_id: { type: 'string', maxLength: 128 },
-        xagent_download_url: { type: 'string', format: 'url' },
-        server_ip: { type: 'string', format: 'ipv4' }
-      }
-    }),
-    role_scope: JSON.stringify(['ixvpn']),
-    risk_level: 'guarded',
-    timeout_seconds: 600,
-    executor_type: 'agent',
-    cooldown_seconds: 7200,
-    max_retries: 0,
-    auto_enabled: 0,
-    requires_approval: 1,
-    batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']),
-    success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }),
-    fallback_action_key: '',
-    priority: 100,
-    metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xagent-server.zip' })
+    param_schema: JSON.stringify({ required: ['server_id', 'xagent_download_url', 'server_ip'], properties: { server_id: { type: 'string', maxLength: 128 }, xagent_download_url: { type: 'string', format: 'url' }, server_ip: { type: 'string', format: 'ipv4' } } }),
+    role_scope: JSON.stringify(['ixvpn']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xagent-server.zip' })
   },
   {
-    action_key: 'install_xnftables',
-    name: '安装 xnftables',
-    display_name: '安装 xnftables',
-    category: 'install',
-    description: '安装/重建 xvpn-bridge-server',
+    action_key: 'install_xnftables', name: '安装 xnftables', display_name: '安装 xnftables', category: 'install', description: '安装/重建 xvpn-bridge-server',
     script_path: '/opt/core-service/scripts/install_xnftables.sh',
-    param_schema: JSON.stringify({
-      required: ['server_id', 'download_url'],
-      properties: {
-        server_id: { type: 'string', maxLength: 128 },
-        download_url: { type: 'string', format: 'url' }
-      }
-    }),
-    role_scope: JSON.stringify(['xbridge']),
-    risk_level: 'guarded',
-    timeout_seconds: 600,
-    executor_type: 'agent',
-    cooldown_seconds: 7200,
-    max_retries: 0,
-    auto_enabled: 0,
-    requires_approval: 1,
-    batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8789_down', 'component_missing']),
-    success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }),
-    fallback_action_key: '',
-    priority: 100,
-    metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xbrigde-server.zip' })
+    param_schema: JSON.stringify({ required: ['server_id', 'download_url'], properties: { server_id: { type: 'string', maxLength: 128 }, download_url: { type: 'string', format: 'url' } } }),
+    role_scope: JSON.stringify(['xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify(['port_8789_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: 'http://98.126.233.218:8080/directlink/1/xbrigde-server.zip' })
+  },
+  {
+    action_key: 'install_redis', name: '安装 redis', display_name: '安装 redis', category: 'install', description: '在线安装 redis 并校验 6379 端口',
+    script_path: '/opt/core-service/scripts/install_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn', 'redis']),
+    risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify(['port_6379_down', 'component_missing']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'restart_redis', priority: 100, metadata: JSON.stringify({ install_url: 'http://38.75.137.157:8080/directlink/1/install_redis.sh' })
   }
 ];
 
@@ -164,9 +80,12 @@ CREATE TABLE IF NOT EXISTS metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, server
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS action_definitions (id INTEGER PRIMARY KEY AUTOINCREMENT, action_key TEXT NOT NULL UNIQUE, name TEXT NOT NULL, description TEXT DEFAULT '', script_path TEXT NOT NULL, param_schema TEXT NOT NULL DEFAULT '{}', role_scope TEXT NOT NULL DEFAULT '[]', risk_level TEXT NOT NULL DEFAULT 'safe', timeout_seconds INTEGER NOT NULL DEFAULT 300, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS action_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL UNIQUE, server_id TEXT NOT NULL, action_key TEXT NOT NULL, params_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'pending', source TEXT NOT NULL DEFAULT 'dashboard', created_by TEXT DEFAULT '', priority INTEGER NOT NULL DEFAULT 100, timeout_seconds INTEGER NOT NULL DEFAULT 300, lease_token TEXT DEFAULT '', lease_expires_at TEXT DEFAULT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, started_at TEXT DEFAULT NULL, finished_at TEXT DEFAULT NULL, result_code TEXT DEFAULT '', exit_code INTEGER DEFAULT NULL, result_summary TEXT DEFAULT '', log_excerpt TEXT DEFAULT '', error_message TEXT DEFAULT '', retry_count INTEGER NOT NULL DEFAULT 0, parent_incident_id TEXT DEFAULT '', metadata TEXT NOT NULL DEFAULT '{}');
+CREATE TABLE IF NOT EXISTS incidents (id INTEGER PRIMARY KEY AUTOINCREMENT, incident_key TEXT NOT NULL UNIQUE, dedupe_key TEXT NOT NULL, server_id TEXT NOT NULL, fault_type TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'warning', status TEXT NOT NULL DEFAULT 'open', title TEXT DEFAULT '', details TEXT DEFAULT '', suggested_action TEXT DEFAULT '', first_seen_at TEXT DEFAULT CURRENT_TIMESTAMP, last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP, resolved_at TEXT DEFAULT NULL, action_task_id TEXT DEFAULT '', metadata TEXT NOT NULL DEFAULT '{}');
 CREATE INDEX IF NOT EXISTS idx_action_tasks_server_status ON action_tasks(server_id, status);
 CREATE INDEX IF NOT EXISTS idx_action_tasks_status_priority_created ON action_tasks(status, priority, created_at);
 CREATE INDEX IF NOT EXISTS idx_action_tasks_action_key ON action_tasks(action_key);
+CREATE INDEX IF NOT EXISTS idx_incidents_server_status ON incidents(server_id, status);
+CREATE INDEX IF NOT EXISTS idx_incidents_fault_status ON incidents(fault_type, status);
 `);
 for (const sql of [
   `ALTER TABLE servers ADD COLUMN stable_order INTEGER`,
@@ -194,10 +113,7 @@ const ensureSetting = db.prepare(`INSERT OR IGNORE INTO settings(key, value) VAL
 ensureSetting.run('monitor_rules', JSON.stringify(DEFAULT_RULES));
 const ensureAction = db.prepare(`INSERT OR IGNORE INTO action_definitions(action_key, name, description, script_path, param_schema, role_scope, risk_level, timeout_seconds, enabled, display_name, category, executor_type, cooldown_seconds, max_retries, auto_enabled, requires_approval, batch_enabled, trigger_faults, success_criteria, fallback_action_key, priority, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 const updateAction = db.prepare(`UPDATE action_definitions SET name=?, description=?, script_path=?, param_schema=?, role_scope=?, risk_level=?, timeout_seconds=?, display_name=?, category=?, executor_type=?, cooldown_seconds=?, max_retries=?, auto_enabled=?, requires_approval=?, batch_enabled=?, trigger_faults=?, success_criteria=?, fallback_action_key=?, priority=?, metadata=?, updated_at=CURRENT_TIMESTAMP WHERE action_key=?`);
-DEFAULT_ACTION_DEFINITIONS.forEach((a) => {
-  ensureAction.run(a.action_key, a.name, a.description, a.script_path, a.param_schema, a.role_scope, a.risk_level, a.timeout_seconds, a.display_name, a.category, a.executor_type, a.cooldown_seconds, a.max_retries, a.auto_enabled, a.requires_approval, a.batch_enabled, a.trigger_faults, a.success_criteria, a.fallback_action_key, a.priority, a.metadata);
-  updateAction.run(a.name, a.description, a.script_path, a.param_schema, a.role_scope, a.risk_level, a.timeout_seconds, a.display_name, a.category, a.executor_type, a.cooldown_seconds, a.max_retries, a.auto_enabled, a.requires_approval, a.batch_enabled, a.trigger_faults, a.success_criteria, a.fallback_action_key, a.priority, a.metadata, a.action_key);
-});
+DEFAULT_ACTION_DEFINITIONS.forEach((a) => { ensureAction.run(a.action_key, a.name, a.description, a.script_path, a.param_schema, a.role_scope, a.risk_level, a.timeout_seconds, a.display_name, a.category, a.executor_type, a.cooldown_seconds, a.max_retries, a.auto_enabled, a.requires_approval, a.batch_enabled, a.trigger_faults, a.success_criteria, a.fallback_action_key, a.priority, a.metadata); updateAction.run(a.name, a.description, a.script_path, a.param_schema, a.role_scope, a.risk_level, a.timeout_seconds, a.display_name, a.category, a.executor_type, a.cooldown_seconds, a.max_retries, a.auto_enabled, a.requires_approval, a.batch_enabled, a.trigger_faults, a.success_criteria, a.fallback_action_key, a.priority, a.metadata, a.action_key); });
 
 function getRules() { const row = db.prepare(`SELECT value FROM settings WHERE key = 'monitor_rules'`).get(); if (!row) return DEFAULT_RULES; try { const parsed = JSON.parse(row.value); return Object.fromEntries(Object.entries(DEFAULT_RULES).map(([key, val]) => [key, { ...val, ...(parsed[key] || {}) }])); } catch { return DEFAULT_RULES; } }
 function cleanupOldMetrics() { db.prepare(`DELETE FROM metrics WHERE created_at < datetime('now', ?)`).run(`-${Math.max(1, METRICS_RETENTION_DAYS)} days`); }
@@ -216,12 +132,43 @@ function isValidUrl(value) { try { new URL(String(value || '')); return true; } 
 function validateParams(definition, params = {}) { let schema = {}; try { schema = JSON.parse(definition.param_schema || '{}'); } catch { return { ok: false, error: 'invalid param_schema' }; } const required = Array.isArray(schema.required) ? schema.required : []; const properties = schema.properties || {}; for (const key of required) { const val = params[key]; if (val == null || String(val).trim() === '') return { ok: false, error: `missing param: ${key}` }; } for (const [key, rule] of Object.entries(properties)) { const val = params[key]; if (val == null) continue; const str = String(val); if (rule.maxLength && str.length > rule.maxLength) return { ok: false, error: `param too long: ${key}` }; if (rule.format === 'url' && !isValidUrl(str)) return { ok: false, error: `invalid url: ${key}` }; if (rule.format === 'ipv4' && !isValidIPv4(str)) return { ok: false, error: `invalid ipv4: ${key}` }; } return { ok: true }; }
 function genTaskId() { return `task_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`; }
 function genLeaseToken() { return `lease_${crypto.randomBytes(12).toString('hex')}`; }
+function faultSeverity(faultType) { if (faultType === 'server_offline') return 'critical'; return 'warning'; }
+function faultTitle(serverId, faultType) { const map = { port_443_down: '内核端口 443 异常', port_6379_down: 'Redis 端口 6379 异常', port_8888_down: 'XAgent 端口 8888 异常', port_8789_down: 'XBridge 端口 8789 异常', server_offline: '节点离线' }; return `${serverId} · ${map[faultType] || faultType}`; }
+function suggestAction(faultType) { const map = { port_443_down: 'update_xcore', port_6379_down: 'restart_redis', port_8888_down: 'restart_xagent', port_8789_down: 'restart_xbridge', server_offline: '' }; return map[faultType] || ''; }
+function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {}) {
+  const activeFaults = new Set();
+  for (const issue of issues || []) {
+    let faultType = '';
+    if (String(issue).includes('端口 443')) faultType = 'port_443_down';
+    else if (String(issue).includes('端口 6379')) faultType = 'port_6379_down';
+    else if (String(issue).includes('端口 8888')) faultType = 'port_8888_down';
+    else if (String(issue).includes('端口 8789')) faultType = 'port_8789_down';
+    else if (String(issue).includes('Heartbeat timeout')) faultType = 'server_offline';
+    if (!faultType) continue;
+    activeFaults.add(faultType);
+    const dedupeKey = `${serverId}:${faultType}`;
+    const incidentKey = crypto.createHash('sha1').update(dedupeKey).digest('hex').slice(0, 24);
+    const existing = db.prepare(`SELECT id, status FROM incidents WHERE dedupe_key = ? AND status IN ('open','acknowledged','auto_remediating','failed') ORDER BY id DESC LIMIT 1`).get(dedupeKey);
+    if (existing) {
+      db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), existing.id);
+    } else {
+      db.prepare(`INSERT INTO incidents(incident_key, dedupe_key, server_id, fault_type, severity, status, title, details, suggested_action, metadata) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`).run(incidentKey, dedupeKey, serverId, faultType, faultSeverity(faultType), faultTitle(serverId, faultType), String(issue), suggestAction(faultType), JSON.stringify(metadata || {}));
+    }
+  }
+  const openRows = db.prepare(`SELECT id, fault_type FROM incidents WHERE server_id = ? AND status IN ('open','acknowledged','auto_remediating','failed')`).all(serverId);
+  for (const row of openRows) {
+    if (!activeFaults.has(row.fault_type) && !(row.fault_type === 'server_offline' && serverStatus === 'offline')) {
+      db.prepare(`UPDATE incidents SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(row.id);
+    }
+  }
+}
 
 app.get('/api/health', (req, res) => res.json({ ok: true, hostname: os.hostname(), port: PORT, offlineAfterSeconds: OFFLINE_AFTER_SECONDS, metricsRetentionDays: METRICS_RETENTION_DAYS }));
 app.get('/api/settings/monitor-rules', authMiddleware, (req, res) => res.json(getRules()));
 app.patch('/api/settings/monitor-rules', authMiddleware, (req, res) => { const body = req.body || {}; const nextRules = Object.fromEntries(Object.entries(DEFAULT_RULES).map(([key, val]) => [key, { ...val, ...(body[key] || {}) }])); db.prepare(`UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'monitor_rules'`).run(JSON.stringify(nextRules)); res.json({ ok: true, rules: nextRules }); });
 app.get('/api/actions/definitions', authMiddleware, (req, res) => { const rows = db.prepare(`SELECT action_key, name, display_name, category, description, param_schema, role_scope, risk_level, timeout_seconds, executor_type, cooldown_seconds, max_retries, auto_enabled, requires_approval, batch_enabled, trigger_faults, success_criteria, fallback_action_key, priority, metadata FROM action_definitions WHERE enabled = 1 ORDER BY priority ASC, id ASC`).all(); res.json(rows.map((row) => ({ ...row, role_scope: JSON.parse(row.role_scope || '[]'), param_schema: JSON.parse(row.param_schema || '{}'), trigger_faults: JSON.parse(row.trigger_faults || '[]'), success_criteria: JSON.parse(row.success_criteria || '{}'), metadata: JSON.parse(row.metadata || '{}') }))); });
-app.post('/api/agent/register', (req, res) => { const body = req.body || {}, serverId = body.server_id; if (!serverId) return res.status(400).json({ error: 'server_id required' }); ensureGroup.run(DEFAULT_GROUP, 0); const now = new Date().toISOString(); const existing = db.prepare(`SELECT id FROM servers WHERE server_id = ?`).get(serverId); const sameHostOffline = db.prepare(`SELECT id, server_id FROM servers WHERE hostname = ? AND server_id <> ? ORDER BY last_seen DESC, id DESC LIMIT 1`).get(body.hostname || '', serverId); if (!existing && sameHostOffline) { db.prepare(`UPDATE metrics SET server_id = ? WHERE server_id = ?`).run(serverId, sameHostOffline.server_id); db.prepare(`UPDATE servers SET server_id = ?, hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE id = ?`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, sameHostOffline.id); } else if (!existing) { const result = db.prepare(`INSERT INTO servers (server_id, hostname, display_name, ip, instance_id, os, arch, group_name, tags, metadata, status, issue_count, stable_order, last_seen, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'healthy', 0, NULL, ?, ?)`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', DEFAULT_GROUP, JSON.stringify(body.tags || []), JSON.stringify(body.metadata || {}), now, now); db.prepare(`UPDATE servers SET stable_order = id WHERE id = ?`).run(result.lastInsertRowid); } else { db.prepare(`UPDATE servers SET hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE server_id = ?`).run(body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, serverId); } db.prepare(`INSERT INTO metrics (server_id, cpu_usage, memory_usage, memory_used, memory_total, disk_usage, disk_used, disk_total, port_443, port_6379, port_8888, port_8789, issues) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`).run(serverId, Number(body.cpu_usage || 0), Number(body.memory_usage || 0), Number(body.memory_used || 0), Number(body.memory_total || 0), Number(body.disk_usage || 0), Number(body.disk_used || 0), Number(body.disk_total || 0), body.ports?.['443'] ? 1 : 0, body.ports?.['6379'] ? 1 : 0, body.ports?.['8888'] ? 1 : 0, body.ports?.['8789'] ? 1 : 0); const derived = calculateStatus(body); db.prepare(`UPDATE servers SET status = ?, issue_count = ?, updated_at = ? WHERE server_id = ?`).run(derived.status, derived.issue_count, now, serverId); db.prepare(`UPDATE metrics SET issues = ? WHERE id = (SELECT id FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT 1)`).run(JSON.stringify(derived.issues), serverId); res.json({ ok: true, status: derived.status, issues: derived.issues, assigned_group: DEFAULT_GROUP }); });
+app.get('/api/incidents', authMiddleware, (req, res) => { const { status, server_id, limit } = req.query || {}; const where = []; const params = []; if (status) { where.push('status = ?'); params.push(status); } if (server_id) { where.push('server_id = ?'); params.push(server_id); } const sql = `SELECT * FROM incidents ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY last_seen_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200))); res.json(db.prepare(sql).all(...params)); });
+app.post('/api/agent/register', (req, res) => { const body = req.body || {}, serverId = body.server_id; if (!serverId) return res.status(400).json({ error: 'server_id required' }); ensureGroup.run(DEFAULT_GROUP, 0); const now = new Date().toISOString(); const existing = db.prepare(`SELECT id FROM servers WHERE server_id = ?`).get(serverId); const sameHostOffline = db.prepare(`SELECT id, server_id FROM servers WHERE hostname = ? AND server_id <> ? ORDER BY last_seen DESC, id DESC LIMIT 1`).get(body.hostname || '', serverId); if (!existing && sameHostOffline) { db.prepare(`UPDATE metrics SET server_id = ? WHERE server_id = ?`).run(serverId, sameHostOffline.server_id); db.prepare(`UPDATE servers SET server_id = ?, hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE id = ?`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, sameHostOffline.id); } else if (!existing) { const result = db.prepare(`INSERT INTO servers (server_id, hostname, display_name, ip, instance_id, os, arch, group_name, tags, metadata, status, issue_count, stable_order, last_seen, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'healthy', 0, NULL, ?, ?)`).run(serverId, body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', DEFAULT_GROUP, JSON.stringify(body.tags || []), JSON.stringify(body.metadata || {}), now, now); db.prepare(`UPDATE servers SET stable_order = id WHERE id = ?`).run(result.lastInsertRowid); } else { db.prepare(`UPDATE servers SET hostname = ?, display_name = ?, ip = ?, instance_id = ?, os = ?, arch = ?, metadata = ?, last_seen = ?, updated_at = ? WHERE server_id = ?`).run(body.hostname || serverId, body.display_name || body.hostname || serverId, body.ip || '', body.instance_id || '', body.os || '', body.arch || '', JSON.stringify(body.metadata || {}), now, now, serverId); } db.prepare(`INSERT INTO metrics (server_id, cpu_usage, memory_usage, memory_used, memory_total, disk_usage, disk_used, disk_total, port_443, port_6379, port_8888, port_8789, issues) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`).run(serverId, Number(body.cpu_usage || 0), Number(body.memory_usage || 0), Number(body.memory_used || 0), Number(body.memory_total || 0), Number(body.disk_usage || 0), Number(body.disk_used || 0), Number(body.disk_total || 0), body.ports?.['443'] ? 1 : 0, body.ports?.['6379'] ? 1 : 0, body.ports?.['8888'] ? 1 : 0, body.ports?.['8789'] ? 1 : 0); const derived = calculateStatus(body); db.prepare(`UPDATE servers SET status = ?, issue_count = ?, updated_at = ? WHERE server_id = ?`).run(derived.status, derived.issue_count, now, serverId); db.prepare(`UPDATE metrics SET issues = ? WHERE id = (SELECT id FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT 1)`).run(JSON.stringify(derived.issues), serverId); upsertIncidentsForServer(serverId, derived.status, derived.issues, { ip: body.ip || '', hostname: body.hostname || '', instance_id: body.instance_id || '' }); res.json({ ok: true, status: derived.status, issues: derived.issues, assigned_group: DEFAULT_GROUP }); });
 app.post('/api/actions/tasks', authMiddleware, (req, res) => { const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const actionKey = String(body.action_key || '').trim(); const params = body.params || {}; const source = String(body.source || 'dashboard'); const createdBy = String(body.created_by || 'dashboard'); if (!serverId || !actionKey) return res.status(400).json({ error: 'server_id and action_key required' }); const def = db.prepare(`SELECT * FROM action_definitions WHERE action_key = ? AND enabled = 1`).get(actionKey); if (!def) return res.status(404).json({ error: 'action definition not found' }); const activeTask = db.prepare(`SELECT task_id, status FROM action_tasks WHERE server_id = ? AND status IN ('pending', 'leased', 'running') ORDER BY created_at ASC LIMIT 1`).get(serverId); if (activeTask) return res.status(409).json({ error: 'server already has active task', activeTask }); const v = validateParams(def, params); if (!v.ok) return res.status(400).json({ error: v.error }); const taskId = genTaskId(); db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, '{}')`).run(taskId, serverId, actionKey, JSON.stringify(params), source, createdBy, Number(def.priority || 100), Number(def.timeout_seconds || 300)); return res.json({ ok: true, task: { task_id: taskId, status: 'pending' } }); });
 app.get('/api/actions/tasks', authMiddleware, (req, res) => { const { server_id, status, action_key, limit } = req.query || {}; const where = []; const params = []; if (server_id) { where.push(`server_id = ?`); params.push(server_id); } if (status) { where.push(`status = ?`); params.push(status); } if (action_key) { where.push(`action_key = ?`); params.push(action_key); } const sql = `SELECT * FROM action_tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200))); res.json(db.prepare(sql).all(...params)); });
 app.get('/api/actions/tasks/:taskId', authMiddleware, (req, res) => { const row = db.prepare(`SELECT * FROM action_tasks WHERE task_id = ?`).get(req.params.taskId); if (!row) return res.status(404).json({ error: 'task not found' }); res.json(row); });
