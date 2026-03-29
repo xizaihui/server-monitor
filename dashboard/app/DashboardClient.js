@@ -11,6 +11,8 @@ import ActionTaskModal from './ActionTaskModal';
 import TaskHistoryModal from './TaskHistoryModal';
 import PackageUploadModal from './PackageUploadModal';
 
+const CURRENT_OPS_VERSION = '2026.03.29-1';
+
 function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
@@ -44,6 +46,13 @@ function isProblem(item) {
 
 function hasIssue(server, keyword) {
   return Array.isArray(server?.issues) && server.issues.some((x) => String(x).includes(keyword));
+}
+
+function scriptsBadge(server) {
+  const version = server?.metadata?.ops_scripts_version || '';
+  if (!version) return { text: '未初始化', tone: 'offline' };
+  if (version !== CURRENT_OPS_VERSION) return { text: `需更新 ${version}`, tone: 'problem' };
+  return { text: version, tone: 'healthy' };
 }
 
 export default function DashboardClient({ servers: initialServers, groups, selectedGroup = 'ALL', initialRules }) {
@@ -139,15 +148,16 @@ export default function DashboardClient({ servers: initialServers, groups, selec
     offline: servers.filter((s) => s.status === 'offline').length,
   }), [servers]);
 
-  const reportInterval = useMemo(() => {
-    const hit = servers.find((s) => s.metadata?.report_interval);
-    return Number(hit?.metadata?.report_interval || 10);
-  }, [servers]);
-
   const filtered = useMemo(() => servers.filter((s) => {
-    const matchesStatus = status === 'ALL' ? true : s.status === status;
+    const matchesStatus = status === 'ALL'
+      ? true
+      : status === 'scripts_missing'
+        ? !s.metadata?.ops_scripts_version
+        : status === 'scripts_outdated'
+          ? !!s.metadata?.ops_scripts_version && s.metadata?.ops_scripts_version !== CURRENT_OPS_VERSION
+          : s.status === status;
     const q = query.trim().toLowerCase();
-    const matchesQuery = !q ? true : [s.ip, s.instance_id, s.display_name, s.hostname, s.group_name, s.server_id, s.metadata?.agent_version]
+    const matchesQuery = !q ? true : [s.ip, s.instance_id, s.display_name, s.hostname, s.group_name, s.server_id, s.metadata?.agent_version, s.metadata?.ops_scripts_version]
       .filter(Boolean)
       .some((v) => String(v).toLowerCase().includes(q));
     return matchesStatus && matchesQuery;
@@ -229,9 +239,9 @@ export default function DashboardClient({ servers: initialServers, groups, selec
 
       <section className="toolbar compactToolbar cleanToolbar liveToolbar">
         <div className="toolbarGroup">
-          <input className="input searchInput compactInput" placeholder="搜索 IP / server-id / 节点名 / 分类 / ID" value={query} onChange={(e) => onChangeQuery(e.target.value)} />
+          <input className="input searchInput compactInput" placeholder="搜索 IP / server-id / 节点名 / 分类 / ID / 版本" value={query} onChange={(e) => onChangeQuery(e.target.value)} />
           <div className="segmented compactSegmented">
-            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康']].map(([value, label]) => (
+            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康'], ['scripts_missing', '脚本未初始化'], ['scripts_outdated', '脚本需更新']].map(([value, label]) => (
               <button key={value} type="button" className={`segment compactSegment ${status === value ? 'active' : ''}`} onClick={() => onChangeStatus(value)}>{label}</button>
             ))}
           </div>
@@ -247,6 +257,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           <select className="select compactSelect" value={pageSize} onChange={(e) => onChangePageSize(e.target.value)}>
             {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
+          <span>脚本基线 {CURRENT_OPS_VERSION}</span>
           <span>共 {filtered.length} 台</span>
         </div>
       </section>
@@ -281,6 +292,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                 <th className="stickyCol highContrastHead">服务器</th>
                 <th className="highContrastHead">server-id</th>
                 <th className="highContrastHead">状态</th>
+                <th className="highContrastHead">脚本版本</th>
                 <th className="highContrastHead">CPU</th>
                 <th className="highContrastHead">内存</th>
                 <th className="highContrastHead">磁盘</th>
@@ -292,7 +304,9 @@ export default function DashboardClient({ servers: initialServers, groups, selec
               </tr>
             </thead>
             <tbody>
-              {paged.map((s) => (
+              {paged.map((s) => {
+                const sb = scriptsBadge(s);
+                return (
                 <tr key={s.server_id} className={`${s.status === 'problem' ? 'problemRow' : s.status === 'offline' ? 'offlineRow' : ''} compactRow`}>
                   <td className="stickyCol stickyBodyCol checkboxCol"><input type="checkbox" checked={selectedIds.includes(s.server_id)} onChange={() => toggleOne(s.server_id)} /></td>
                   <td className="stickyCol stickyBodyCol compactStickyCol stickyOffsetCol">
@@ -302,6 +316,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       </button>
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
+                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'}</div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
                   <td>
@@ -310,6 +325,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       <span className={`badge ${s.status} compactBadge`}>{s.status === 'healthy' ? 'Healthy' : s.status === 'problem' ? 'Problem' : 'Offline'}</span>
                     </div>
                   </td>
+                  <td><span className={`badge ${sb.tone}`}>{sb.text}</span></td>
                   <td><MetricBar value={s.cpu_usage} alert={hasIssue(s, 'CPU')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.memory_usage} alert={hasIssue(s, '内存')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.disk_usage} alert={hasIssue(s, '磁盘')} offline={s.status === 'offline'} /></td>
@@ -321,8 +337,8 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                     <ServerActions server={s} compact onEdit={setEditServer} onDelete={setDeleteServer} onTaskHistory={setTaskHistoryServer} />
                   </td>
                 </tr>
-              ))}
-              {paged.length === 0 ? <tr><td colSpan="12" className="emptyStateCell">当前筛选下暂无节点</td></tr> : null}
+              )})}
+              {paged.length === 0 ? <tr><td colSpan="13" className="emptyStateCell">当前筛选下暂无节点</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -341,7 +357,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       <ServerModal open={!!editServer} mode="edit" server={editServer} groups={groups} onClose={() => setEditServer(null)} onSaved={() => { setToast({ type: 'success', text: '节点修改已保存' }); location.reload(); }} />
       <ServerModal open={!!deleteServer} mode="delete" server={deleteServer} groups={groups} onClose={() => setDeleteServer(null)} onDeleted={handleDeleted} />
       <GroupManagerModal open={groupManagerOpen} groups={groups} onClose={() => setGroupManagerOpen(false)} />
-      <MonitorRulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} reportInterval={reportInterval} onSaved={(nextRules) => { setRules(nextRules); setToast({ type: 'success', text: '监控规则已保存' }); }} />
+      <MonitorRulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} reportInterval={10} onSaved={(nextRules) => { setRules(nextRules); setToast({ type: 'success', text: '监控规则已保存' }); }} />
       <BulkMoveModal open={bulkMoveOpen} groups={groups} count={selectedIds.length} onClose={() => setBulkMoveOpen(false)} onConfirm={bulkMove} />
       <ActionTaskModal
         open={taskServers.length > 0}
