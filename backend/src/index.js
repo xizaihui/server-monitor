@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { execFileSync } from 'child_process';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -151,6 +152,8 @@ function calculateStatus(payload) { const rules = getRules(); const issues = [];
 function isValidIPv4(value) { return /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(String(value || '')); }
 function isValidUrl(value) { try { new URL(String(value || '')); return true; } catch { return false; } }
 function validateParams(definition, params = {}) { let schema = {}; try { schema = JSON.parse(definition.param_schema || '{}'); } catch { return { ok: false, error: 'invalid param_schema' }; } const required = Array.isArray(schema.required) ? schema.required : []; const properties = schema.properties || {}; for (const key of required) { const val = params[key]; if (val == null || String(val).trim() === '') return { ok: false, error: `missing param: ${key}` }; } for (const [key, rule] of Object.entries(properties)) { const val = params[key]; if (val == null) continue; const str = String(val); if (rule.maxLength && str.length > rule.maxLength) return { ok: false, error: `param too long: ${key}` }; if (rule.format === 'url' && !isValidUrl(str)) return { ok: false, error: `invalid url: ${key}` }; if (rule.format === 'ipv4' && !isValidIPv4(str)) return { ok: false, error: `invalid ipv4: ${key}` }; } return { ok: true }; }
+function fileSha256(filePath) { const hash = crypto.createHash('sha256'); hash.update(fs.readFileSync(filePath)); return hash.digest('hex'); }
+function fileMd5(filePath) { const hash = crypto.createHash('md5'); hash.update(fs.readFileSync(filePath)); return hash.digest('hex'); }
 function genTaskId() { return `task_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`; }
 function genLeaseToken() { return `lease_${crypto.randomBytes(12).toString('hex')}`; }
 function faultSeverity(faultType) { if (faultType === 'server_offline') return 'critical'; return 'warning'; }
@@ -189,6 +192,40 @@ app.get('/api/settings/monitor-rules', authMiddleware, (req, res) => res.json(ge
 app.patch('/api/settings/monitor-rules', authMiddleware, (req, res) => { const body = req.body || {}; const nextRules = Object.fromEntries(Object.entries(DEFAULT_RULES).map(([key, val]) => [key, { ...val, ...(body[key] || {}) }])); db.prepare(`UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'monitor_rules'`).run(JSON.stringify(nextRules)); res.json({ ok: true, rules: nextRules }); });
 app.get('/api/actions/definitions', authMiddleware, (req, res) => { const rows = db.prepare(`SELECT action_key, name, display_name, category, description, param_schema, role_scope, risk_level, timeout_seconds, executor_type, cooldown_seconds, max_retries, auto_enabled, requires_approval, batch_enabled, trigger_faults, success_criteria, fallback_action_key, priority, metadata FROM action_definitions WHERE enabled = 1 ORDER BY priority ASC, id ASC`).all(); res.json(rows.map((row) => ({ ...row, role_scope: JSON.parse(row.role_scope || '[]'), param_schema: JSON.parse(row.param_schema || '{}'), trigger_faults: JSON.parse(row.trigger_faults || '[]'), success_criteria: JSON.parse(row.success_criteria || '{}'), metadata: JSON.parse(row.metadata || '{}') }))); });
 app.get('/api/incidents', authMiddleware, (req, res) => { const { status, server_id, limit } = req.query || {}; const where = []; const params = []; if (status) { where.push('status = ?'); params.push(status); } if (server_id) { where.push('server_id = ?'); params.push(server_id); } const sql = `SELECT * FROM incidents ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY last_seen_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200))); res.json(db.prepare(sql).all(...params)); });
+app.get('/api/packages/checksums', authMiddleware, (req, res) => {
+  try {
+    const xray = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'xcore.zip');
+    const result = {
+      xcore_zip: fs.existsSync(xray) ? { md5: fileMd5(xray), sha256: fileSha256(xray) } : null,
+      xagent_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'xagent', 'xagent-server.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
+      xbridge_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'xbridge', 'xbridge-server.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
+      redis_script: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'redis', 'install_redis.sh'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
+      ops_scripts_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'ops', 'ops-scripts.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
+    };
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'checksum failed' });
+  }
+});
+app.get('/api/packages/md5', authMiddleware, (req, res) => {
+  try {
+    const pkg = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'xcore.zip');
+    if (!fs.existsSync(pkg)) return res.status(404).type('text/plain').send('xray=NOT_FOUND\nsingbox=NOT_FOUND\n');
+    const tmpDir = fs.mkdtempSync('/tmp/xcore-md5-');
+    try {
+      execFileSync('unzip', ['-qo', pkg, '-d', tmpDir]);
+      const xrayPath = path.join(tmpDir, 'xcore', 'xray');
+      const singboxPath = path.join(tmpDir, 'xcore', 'singbox');
+      const xrayMd5 = fs.existsSync(xrayPath) ? fileMd5(xrayPath) : 'NOT_FOUND';
+      const singboxMd5 = fs.existsSync(singboxPath) ? fileMd5(singboxPath) : 'NOT_FOUND';
+      res.type('text/plain').send(`xray=${xrayMd5}\nsingbox=${singboxMd5}\n`);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  } catch (error) {
+    res.status(500).type('text/plain').send('xray=ERROR\nsingbox=ERROR\n');
+  }
+});
 app.post('/api/uploads/packages', authMiddleware, (req, res) => {
   const contentType = String(req.headers['content-type'] || '');
   const match = contentType.match(/boundary=(.+)$/);
