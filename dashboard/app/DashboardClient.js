@@ -54,7 +54,6 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [selectedServer, setSelectedServer] = useState(null);
   const [editServer, setEditServer] = useState(null);
   const [deleteServer, setDeleteServer] = useState(null);
-  const [taskServer, setTaskServer] = useState(null);
   const [taskServers, setTaskServers] = useState([]);
   const [taskHistoryServer, setTaskHistoryServer] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -249,16 +248,17 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         </div>
       </section>
 
-      {selectedIds.length > 0 ? (
-        <section className="bulkBar unifiedBulkBar">
-          <div className="small">已选择 {selectedIds.length} 个节点</div>
-          <div className="toolbarGroup">
-            <button className="primaryBtn compactPageBtn" type="button" onClick={() => setTaskServers(selectedServers)} disabled={bulkBusy || !selectedServers.length}>{bulkBusy ? '处理中...' : '批量部署 / 任务'}</button>
-            <button className="pageBtn compactPageBtn" type="button" onClick={() => setBulkMoveOpen(true)} disabled={bulkBusy}>{bulkBusy ? '处理中...' : '批量移动分类'}</button>
-            <button className="dangerBtn compactPageBtn" type="button" onClick={bulkDelete} disabled={bulkBusy}>{bulkBusy ? '处理中...' : '批量彻底删除'}</button>
-          </div>
-        </section>
-      ) : null}
+      <section className="bulkBar unifiedBulkBar taskSubmitBar">
+        <div className="toolbarGroup">
+          <div className="small">统一部署入口：先勾选节点，再点击提交</div>
+          {selectedIds.length > 0 ? <div className="small">当前已选 {selectedIds.length} 个节点</div> : <div className="small">当前未选择节点</div>}
+        </div>
+        <div className="toolbarGroup">
+          <button className="primaryBtn compactPageBtn" type="button" onClick={() => setTaskServers(selectedServers)} disabled={!selectedServers.length || bulkBusy}>递交</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setBulkMoveOpen(true)} disabled={bulkBusy || !selectedIds.length}>移动分类</button>
+          <button className="dangerBtn compactPageBtn" type="button" onClick={bulkDelete} disabled={bulkBusy || !selectedIds.length}>{bulkBusy ? '处理中...' : '删除节点'}</button>
+        </div>
+      </section>
 
       <section className="panel compactPanel cleanPanel">
         <div className="tableHeader compactTableHeader">
@@ -271,7 +271,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         </div>
 
         <div className="tableWrap denseTableWrap pagedTableWrap cleanerTableWrap">
-          <table className="denseTable cleanerTable compactMainTable">
+          <table className="denseTable cleanerTable compactMainTable noTaskColTable">
             <thead>
               <tr>
                 <th className="stickyCol checkboxCol"><input type="checkbox" checked={allPageSelected} onChange={toggleAllPage} /></th>
@@ -285,7 +285,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                 <th className="portHead highContrastHead">6379</th>
                 <th className="portHead highContrastHead">8888</th>
                 <th className="portHead highContrastHead">8789</th>
-                <th className="highContrastHead">任务</th>
+                <th className="highContrastHead">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -315,7 +315,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                   <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>}</td>
                   <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>}</td>
                   <td>
-                    <ServerActions server={s} compact onEdit={setEditServer} onDelete={setDeleteServer} onTask={setTaskServer} onTaskHistory={setTaskHistoryServer} />
+                    <ServerActions server={s} compact onEdit={setEditServer} onDelete={setDeleteServer} onTaskHistory={setTaskHistoryServer} />
                   </td>
                 </tr>
               ))}
@@ -341,11 +341,11 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       <MonitorRulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} reportInterval={reportInterval} onSaved={(nextRules) => { setRules(nextRules); setToast({ type: 'success', text: '监控规则已保存' }); }} />
       <BulkMoveModal open={bulkMoveOpen} groups={groups} count={selectedIds.length} onClose={() => setBulkMoveOpen(false)} onConfirm={bulkMove} />
       <ActionTaskModal
-        open={!!taskServer || taskServers.length > 0}
-        server={taskServer}
+        open={taskServers.length > 0}
         servers={taskServers}
-        onClose={() => { setTaskServer(null); setTaskServers([]); }}
+        onClose={() => { setTaskServers([]); }}
         onCreated={(result) => {
+          setTaskServers([]);
           if (result?.total) {
             setToast({ type: result.failed ? 'warning' : 'success', text: `批量任务已创建：成功 ${result.success}/${result.total}` });
           } else {

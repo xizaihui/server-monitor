@@ -1,9 +1,8 @@
 'use client';
 
-export default function ServerActions({ server, compact = false, onEdit, onDelete, onTask, onTaskHistory }) {
+export default function ServerActions({ server, compact = false, onEdit, onDelete, onTaskHistory }) {
   return (
     <div className="menuWrap actionButtonGroup">
-      {onTask ? <button className={`pageBtn ${compact ? 'compactPageBtn' : ''}`} type="button" onClick={() => onTask?.(server)} title="执行任务">任务</button> : null}
       {onTaskHistory ? <button className={`pageBtn ${compact ? 'compactPageBtn' : ''}`} type="button" onClick={() => onTaskHistory?.(server)} title="任务历史">历史</button> : null}
       <button className={`iconButton subtleAction ${compact ? 'compactIconButton' : ''}`} type="button" onClick={() => onEdit?.(server)} aria-label="编辑节点" title="编辑节点">
         <svg viewBox="0 0 24 24" className="actionIcon" aria-hidden="true">
