@@ -17,3 +17,5 @@ dashboard/.env.production
 
 agent/*.env
 .DS_Store
+
+agent/server-monitor-agent
