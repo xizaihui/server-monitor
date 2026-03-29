@@ -55,6 +55,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [editServer, setEditServer] = useState(null);
   const [deleteServer, setDeleteServer] = useState(null);
   const [taskServer, setTaskServer] = useState(null);
+  const [taskServers, setTaskServers] = useState([]);
   const [taskHistoryServer, setTaskHistoryServer] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
@@ -162,6 +163,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
     return arr;
   }, [currentPage, totalPages]);
   const allPageSelected = paged.length > 0 && paged.every((s) => selectedIds.includes(s.server_id));
+  const selectedServers = useMemo(() => servers.filter((s) => selectedIds.includes(s.server_id)), [servers, selectedIds]);
 
   function onChangeStatus(next) { setStatus(next); setPage(1); }
   function onChangeQuery(v) { setQuery(v); setPage(1); }
@@ -190,7 +192,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
     const ok = window.confirm(`确认彻底删除 ${selectedIds.length} 个节点吗？\n\n这会同时删除节点记录和历史监控数据。`);
     if (!ok) return;
     setBulkBusy(true);
-    const results = await Promise.all(selectedIds.map((id) => fetch(`/api/proxy/servers/${id}`, { method: 'DELETE' }).then((r) => r.json().catch(() => ({ ok: false })))));
+    const results = await Promise.all(selectedIds.map((id) => fetch(`/api/proxy/servers/${id}`, { method: 'DELETE' }).then((r) => r.json().catch(() => ({ ok: false })))))
     const success = results.filter((x) => x.ok).length;
     const metricRows = results.reduce((sum, item) => sum + Number(item.deletedMetricRows || 0), 0);
     setServers((prev) => prev.filter((item) => !selectedIds.includes(item.server_id)));
@@ -248,9 +250,10 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       </section>
 
       {selectedIds.length > 0 ? (
-        <section className="bulkBar">
+        <section className="bulkBar unifiedBulkBar">
           <div className="small">已选择 {selectedIds.length} 个节点</div>
           <div className="toolbarGroup">
+            <button className="primaryBtn compactPageBtn" type="button" onClick={() => setTaskServers(selectedServers)} disabled={bulkBusy || !selectedServers.length}>{bulkBusy ? '处理中...' : '批量部署 / 任务'}</button>
             <button className="pageBtn compactPageBtn" type="button" onClick={() => setBulkMoveOpen(true)} disabled={bulkBusy}>{bulkBusy ? '处理中...' : '批量移动分类'}</button>
             <button className="dangerBtn compactPageBtn" type="button" onClick={bulkDelete} disabled={bulkBusy}>{bulkBusy ? '处理中...' : '批量彻底删除'}</button>
           </div>
@@ -268,7 +271,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         </div>
 
         <div className="tableWrap denseTableWrap pagedTableWrap cleanerTableWrap">
-          <table className="denseTable cleanerTable">
+          <table className="denseTable cleanerTable compactMainTable">
             <thead>
               <tr>
                 <th className="stickyCol checkboxCol"><input type="checkbox" checked={allPageSelected} onChange={toggleAllPage} /></th>
@@ -278,11 +281,11 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                 <th className="highContrastHead">CPU</th>
                 <th className="highContrastHead">内存</th>
                 <th className="highContrastHead">磁盘</th>
-                <th className="portHead highContrastHead">内核</th>
-                <th className="portHead highContrastHead">Redis</th>
-                <th className="portHead highContrastHead">XAgent</th>
-                <th className="portHead highContrastHead">XBridge</th>
-                <th className="highContrastHead">操作</th>
+                <th className="portHead highContrastHead">443</th>
+                <th className="portHead highContrastHead">6379</th>
+                <th className="portHead highContrastHead">8888</th>
+                <th className="portHead highContrastHead">8789</th>
+                <th className="highContrastHead">任务</th>
               </tr>
             </thead>
             <tbody>
@@ -297,7 +300,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
                   </td>
-                  <td className="metric sharpText">{s.instance_id || '-'}</td>
+                  <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
                   <td>
                     <div className="statusStack compactStatusStack">
                       <span className={`statusDot ${s.status}`}></span>
@@ -337,7 +340,19 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       <GroupManagerModal open={groupManagerOpen} groups={groups} onClose={() => setGroupManagerOpen(false)} />
       <MonitorRulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} reportInterval={reportInterval} onSaved={(nextRules) => { setRules(nextRules); setToast({ type: 'success', text: '监控规则已保存' }); }} />
       <BulkMoveModal open={bulkMoveOpen} groups={groups} count={selectedIds.length} onClose={() => setBulkMoveOpen(false)} onConfirm={bulkMove} />
-      <ActionTaskModal open={!!taskServer} server={taskServer} onClose={() => setTaskServer(null)} onCreated={() => setToast({ type: 'success', text: '任务已创建' })} />
+      <ActionTaskModal
+        open={!!taskServer || taskServers.length > 0}
+        server={taskServer}
+        servers={taskServers}
+        onClose={() => { setTaskServer(null); setTaskServers([]); }}
+        onCreated={(result) => {
+          if (result?.total) {
+            setToast({ type: result.failed ? 'warning' : 'success', text: `批量任务已创建：成功 ${result.success}/${result.total}` });
+          } else {
+            setToast({ type: 'success', text: '任务已创建' });
+          }
+        }}
+      />
       <TaskHistoryModal open={!!taskHistoryServer} server={taskHistoryServer} onClose={() => setTaskHistoryServer(null)} />
     </>
   );
