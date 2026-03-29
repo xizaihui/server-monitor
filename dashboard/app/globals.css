@@ -210,19 +210,19 @@ button { -webkit-tap-highlight-color: transparent; }
 
 table {
   width: 100%;
-  min-width: 980px;
+  min-width: 940px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
 }
 
 thead th:nth-child(1) { width: 36px; }
-thead th:nth-child(2) { width: 152px; }
-thead th:nth-child(3) { width: 96px; }
-thead th:nth-child(4) { width: 98px; }
-thead th:nth-child(5), thead th:nth-child(6), thead th:nth-child(7) { width: 92px; }
-thead th:nth-child(8), thead th:nth-child(9), thead th:nth-child(10), thead th:nth-child(11) { width: 70px; }
-thead th:nth-child(12) { width: 120px; }
+thead th:nth-child(2) { width: 142px; }
+thead th:nth-child(3) { width: 88px; }
+thead th:nth-child(4) { width: 92px; }
+thead th:nth-child(5), thead th:nth-child(6), thead th:nth-child(7) { width: 84px; }
+thead th:nth-child(8), thead th:nth-child(9), thead th:nth-child(10), thead th:nth-child(11) { width: 64px; }
+thead th:nth-child(12) { width: 108px; }
 
 th, td {
   padding: 11px 8px;
@@ -628,7 +628,7 @@ th.stickyCol { background: #fcfcfd; }
 
 .taskSubmitBar { margin-top: 2px; }
 .slimTextCell { font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
-.compactMainTable, .noTaskColTable { min-width: 980px; }
+.compactMainTable, .noTaskColTable { min-width: 940px; }
 
 .statsGrid {
   display: grid;
