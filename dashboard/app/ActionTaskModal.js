@@ -49,7 +49,7 @@ export default function ActionTaskModal({ open, server, servers, onClose, onCrea
     if (actionKey === 'install_ixvpn') {
       return [
         { key: 'server_id', label: isBulk ? '业务 server_id（批量默认值，可按需统一下发）' : '业务 server_id', placeholder: '例如 1018' },
-        { key: 'xagent_download_url', label: 'xagent 下载地址', placeholder: 'https://...' },
+        { key: 'xagent_download_url', label: 'xagent 安装包地址', placeholder: 'https://...' },
         { key: 'server_ip', label: isBulk ? '服务器 IP（批量时建议逐节点单独使用）' : '服务器 IP', placeholder: '例如 1.2.3.4' },
       ];
     }
@@ -155,7 +155,7 @@ export default function ActionTaskModal({ open, server, servers, onClose, onCrea
 
           {isBulk ? (
             <div className="small" style={{ background: '#f8fafc', border: '1px solid #e4e7ec', borderRadius: 10, padding: '10px 12px', lineHeight: 1.7 }}>
-              批量模式会把同一套参数下发到所有已勾选节点。像 <b>apply_cert</b>、<b>install_ixvpn</b> 这类强依赖节点独立参数的动作，批量前请确认参数是否适用于全部节点。
+              批量模式会把同一套参数下发到所有已勾选节点。像 <b>apply_cert</b>、<b>install_ixvpn</b>（安装 xagent）这类强依赖节点独立参数的动作，批量前请确认参数是否适用于全部节点。
             </div>
           ) : null}
 

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 export default function PackageUploadModal({ open, onClose, onUploaded }) {
-  const [folder, setFolder] = useState('packages/agents');
+  const [folder, setFolder] = useState('packages/xagent');
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -55,11 +55,10 @@ export default function PackageUploadModal({ open, onClose, onUploaded }) {
           <label className="fieldLabel">上传目录</label>
           <select className="select fullInput" value={folder} onChange={(e) => setFolder(e.target.value)}>
             <option value="packages/agents">agents</option>
-            <option value="packages/ixvpn">ixvpn</option>
+            <option value="packages/xagent">xagent</option>
             <option value="packages/xbridge">xbridge</option>
             <option value="packages/xcore">xcore</option>
             <option value="packages/redis">redis</option>
-            <option value="packages/misc">misc</option>
           </select>
 
           <label className="fieldLabel">文件</label>

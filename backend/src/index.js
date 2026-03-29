@@ -27,7 +27,7 @@ const DEFAULT_RULES = {
 const DEFAULT_ACTION_DEFINITIONS = [
   {
     action_key: 'restart_xagent', name: '重启 xagent', display_name: '重启 xagent', category: 'safe', description: '重启 xagent 服务并校验 8888 端口',
-    script_path: '/opt/core-service/scripts/restart_xagent.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn']),
+    script_path: '/opt/core-service/scripts/restart_xagent.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
     risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
     trigger_faults: JSON.stringify(['port_8888_down', 'agent_heartbeat_timeout']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: 'install_ixvpn', priority: 10, metadata: JSON.stringify({})
   },
@@ -39,22 +39,22 @@ const DEFAULT_ACTION_DEFINITIONS = [
   },
   {
     action_key: 'restart_redis', name: '重启 redis', display_name: '重启 redis', category: 'safe', description: '重启 redis 服务并校验 6379 端口',
-    script_path: '/opt/core-service/scripts/restart_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn', 'redis']),
+    script_path: '/opt/core-service/scripts/restart_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent', 'redis']),
     risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
     trigger_faults: JSON.stringify(['port_6379_down']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'install_redis', priority: 10, metadata: JSON.stringify({})
   },
   {
-    action_key: 'update_xcore', name: '升级 xcore', display_name: '升级 xcore', category: 'update', description: '增量更新 xcore',
-    script_path: '/opt/core-service/scripts/update_xcore.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn']),
+    action_key: 'update_xcore', name: '更新 xcore 内核', display_name: '更新 xcore 内核', category: 'update', description: '增量更新 xcore 内核并重启 xagent 服务',
+    script_path: '/opt/core-service/scripts/update_xcore.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
     risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xcore/xcore.zip` })
+    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xcore/xcore.zip`, restart_service: 'xagent.service' })
   },
   {
-    action_key: 'install_ixvpn', name: '安装 ixvpn', display_name: '安装 ixvpn', category: 'install', description: '安装/重建 ixvpn + xagent',
+    action_key: 'install_ixvpn', name: '安装 xagent', display_name: '安装 xagent', category: 'install', description: '安装/重建 xagent，并由 xagent 自动拉起 xcore 内核',
     script_path: '/opt/core-service/scripts/install_ixvpn.sh',
     param_schema: JSON.stringify({ required: ['server_id', 'xagent_download_url', 'server_ip'], properties: { server_id: { type: 'string', maxLength: 128 }, xagent_download_url: { type: 'string', format: 'url' }, server_ip: { type: 'string', format: 'ipv4' } } }),
-    role_scope: JSON.stringify(['ixvpn']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/ixvpn/xagent-server.zip` })
+    role_scope: JSON.stringify(['xagent']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xagent/xagent-server.zip` })
   },
   {
     action_key: 'install_xnftables', name: '安装 xnftables', display_name: '安装 xnftables', category: 'install', description: '安装/重建 xvpn-bridge-server',
@@ -65,7 +65,7 @@ const DEFAULT_ACTION_DEFINITIONS = [
   },
   {
     action_key: 'install_redis', name: '安装 redis', display_name: '安装 redis', category: 'install', description: '在线安装 redis 并校验 6379 端口',
-    script_path: '/opt/core-service/scripts/install_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn', 'redis']),
+    script_path: '/opt/core-service/scripts/install_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent', 'redis']),
     risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
     trigger_faults: JSON.stringify(['port_6379_down', 'component_missing']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'restart_redis', priority: 100, metadata: JSON.stringify({ install_url: `${DOWNLOAD_BASE_URL}/packages/redis/install_redis.sh` })
   },
@@ -73,7 +73,7 @@ const DEFAULT_ACTION_DEFINITIONS = [
     action_key: 'apply_cert', name: '申请证书', display_name: '申请证书', category: 'repair', description: '生成自签名证书并检查证书文件',
     script_path: '/opt/core-service/scripts/apply_cert.sh',
     param_schema: JSON.stringify({ required: ['server_ip'], properties: { server_ip: { type: 'string', format: 'ipv4' } } }),
-    role_scope: JSON.stringify(['ixvpn', 'xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    role_scope: JSON.stringify(['xagent', 'xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
     trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/home/cert/Self-visa-certificate-no-domain-name-exists/server.crt', '/home/cert/Self-visa-certificate-no-domain-name-exists/server.key'] }), fallback_action_key: '', priority: 80, metadata: JSON.stringify({})
   }
 ];
@@ -133,11 +133,10 @@ setInterval(cleanupExpiredActionTasks, 15000);
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'agents'), { recursive: true });
-fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'ixvpn'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xagent'), { recursive: true });
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xbridge'), { recursive: true });
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xcore'), { recursive: true });
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'redis'), { recursive: true });
-fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'misc'), { recursive: true });
 const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN || '';
 function authMiddleware(req, res, next) { if (!DASHBOARD_TOKEN) return next(); const auth = req.headers.authorization || ''; const cookie = req.headers.cookie || ''; const tokenFromHeader = auth.startsWith('Bearer ') ? auth.slice(7) : ''; const tokenFromCookie = (cookie.match(/dashboard_token=([^;]+)/) || [])[1] || ''; const tokenFromQuery = req.query?.token || ''; if (tokenFromHeader === DASHBOARD_TOKEN || tokenFromCookie === DASHBOARD_TOKEN || tokenFromQuery === DASHBOARD_TOKEN) return next(); return res.status(401).json({ error: 'unauthorized' }); }
 function checkMetricConsecutive(serverId, column, predicate, consecutive) { const rows = db.prepare(`SELECT ${column} AS value FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT ?`).all(serverId, consecutive); if (rows.length < consecutive) return false; return rows.every((row) => predicate(Number(row.value || 0))); }
@@ -194,7 +193,7 @@ app.post('/api/uploads/packages', authMiddleware, (req, res) => {
       const buffer = Buffer.concat(chunks);
       const boundary = Buffer.from(`--${match[1]}`);
       const parts = buffer.toString('binary').split(boundary.toString('binary')).filter((part) => part.includes('Content-Disposition'));
-      let folder = 'packages/misc';
+      let folder = 'packages/xagent';
       let fileName = '';
       let fileBuffer = null;
       for (const part of parts) {
@@ -214,7 +213,7 @@ app.post('/api/uploads/packages', authMiddleware, (req, res) => {
         }
       }
       if (!fileName || !fileBuffer) return res.status(400).json({ error: 'file missing' });
-      if (!folder.startsWith('packages/')) folder = 'packages/misc';
+      if (!['packages/agents','packages/xagent','packages/xbridge','packages/xcore','packages/redis'].includes(folder)) folder = 'packages/xagent';
       const targetDir = path.join(DOWNLOAD_ROOT, folder);
       fs.mkdirSync(targetDir, { recursive: true });
       const targetPath = path.join(targetDir, fileName);
