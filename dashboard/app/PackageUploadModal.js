@@ -66,6 +66,8 @@ export default function PackageUploadModal({ open, onClose, onUploaded }) {
 
           <div className="small" style={{ background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px' }}>
             默认发布目录：/downloads/{folder}/文件名
+            <br />
+            如果同名文件已存在，系统会先备份到 /downloads/backups/... 再覆盖，方便你回滚。
           </div>
 
           {error ? <div className="small" style={{ color: '#b42318' }}>{error}</div> : null}

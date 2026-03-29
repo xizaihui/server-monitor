@@ -215,11 +215,19 @@ app.post('/api/uploads/packages', authMiddleware, (req, res) => {
       if (!fileName || !fileBuffer) return res.status(400).json({ error: 'file missing' });
       if (!['packages/agents','packages/xagent','packages/xbridge','packages/xcore','packages/redis'].includes(folder)) folder = 'packages/xagent';
       const targetDir = path.join(DOWNLOAD_ROOT, folder);
+      const backupDir = path.join(DOWNLOAD_ROOT, 'backups', folder.replace(/^packages\//, ''));
       fs.mkdirSync(targetDir, { recursive: true });
+      fs.mkdirSync(backupDir, { recursive: true });
       const targetPath = path.join(targetDir, fileName);
+      let backupPath = '';
+      if (fs.existsSync(targetPath)) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        backupPath = path.join(backupDir, `${stamp}__${fileName}`);
+        fs.copyFileSync(targetPath, backupPath);
+      }
       fs.writeFileSync(targetPath, fileBuffer);
       fs.chmodSync(targetPath, 0o644);
-      return res.json({ ok: true, file_name: fileName, path: targetPath, url: `${DOWNLOAD_BASE_URL}/${folder}/${fileName}` });
+      return res.json({ ok: true, file_name: fileName, path: targetPath, url: `${DOWNLOAD_BASE_URL}/${folder}/${fileName}`, backup_path: backupPath || null });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'upload failed' });
     }
