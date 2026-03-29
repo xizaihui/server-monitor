@@ -4,6 +4,8 @@ import { useMemo, useState, useEffect } from 'react';
 
 const ACTION_OPTIONS = [
   { key: 'update_xcore', label: '升级 xcore' },
+  { key: 'restart_xagent', label: '重启 xagent' },
+  { key: 'restart_xbridge', label: '重启 xbridge' },
   { key: 'install_ixvpn', label: '安装 ixvpn' },
   { key: 'install_xnftables', label: '安装 xnftables' },
 ];

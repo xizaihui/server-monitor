@@ -76,6 +76,16 @@ var actionRegistry = map[string]ActionDef{
         TimeoutSec: 300,
         ParamOrder: []string{},
     },
+    "restart_xagent": {
+        ScriptPath: "/opt/core-service/scripts/restart_xagent.sh",
+        TimeoutSec: 120,
+        ParamOrder: []string{},
+    },
+    "restart_xbridge": {
+        ScriptPath: "/opt/core-service/scripts/restart_xbridge.sh",
+        TimeoutSec: 120,
+        ParamOrder: []string{},
+    },
     "install_ixvpn": {
         ScriptPath: "/opt/core-service/scripts/install_ixvpn.sh",
         TimeoutSec: 600,
@@ -211,14 +221,40 @@ func executeTask(serverID string, task ActionTask) TaskResult {
     logs := output.String()
     if len(logs) > 8000 { logs = logs[len(logs)-8000:] }
     if ctx.Err() == context.DeadlineExceeded {
-        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "timeout", ExitCode: -1, ResultCode: "timeout", ResultSummary: "task execution timed out", LogExcerpt: logs, ErrorMessage: "task timeout"}
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "timeout", ExitCode: -1, ResultCode: "timeout", ResultSummary: "任务执行超时", LogExcerpt: logs, ErrorMessage: "task timeout"}
     }
     if err != nil {
         exitCode := 1
         if ee, ok := err.(*osExec.ExitError); ok { exitCode = ee.ExitCode() }
-        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: exitCode, ResultCode: "script_failed", ResultSummary: "script execution failed", LogExcerpt: logs, ErrorMessage: err.Error()}
+        resultCode := "script_failed"
+        resultSummary := "脚本执行失败"
+        lowerLogs := strings.ToLower(logs)
+        switch {
+        case strings.Contains(lowerLogs, "unit xagent.service not found"):
+            resultCode = "service_not_found"
+            resultSummary = "xagent 服务不存在"
+        case strings.Contains(lowerLogs, "unit xvpn-bridge-server.service not found"):
+            resultCode = "service_not_found"
+            resultSummary = "xbridge 服务不存在"
+        case strings.Contains(lowerLogs, "failed to restart") && strings.Contains(lowerLogs, "xagent.service"):
+            resultCode = "service_restart_failed"
+            resultSummary = "xagent 服务重启失败"
+        case strings.Contains(lowerLogs, "failed to restart") && strings.Contains(lowerLogs, "xvpn-bridge-server"):
+            resultCode = "service_restart_failed"
+            resultSummary = "xbridge 服务重启失败"
+        case strings.Contains(lowerLogs, "port 8888 not listening"):
+            resultCode = "port_not_ready"
+            resultSummary = "xagent 端口 8888 未就绪"
+        case strings.Contains(lowerLogs, "port 8789 not listening"):
+            resultCode = "port_not_ready"
+            resultSummary = "xbridge 端口 8789 未就绪"
+        case strings.Contains(lowerLogs, "failed to start xagent.service"):
+            resultCode = "service_start_failed"
+            resultSummary = "xagent 服务启动失败"
+        }
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: exitCode, ResultCode: resultCode, ResultSummary: resultSummary, LogExcerpt: logs, ErrorMessage: err.Error()}
     }
-    return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "task completed successfully", LogExcerpt: logs}
+    return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "任务执行成功", LogExcerpt: logs}
 }
 
 func collect(displayName string, intervalSec int) (*Payload, error) {

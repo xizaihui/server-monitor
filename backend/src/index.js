@@ -65,6 +65,26 @@ const DEFAULT_ACTION_DEFINITIONS = [
     role_scope: JSON.stringify(['ixvpn']),
     risk_level: 'safe',
     timeout_seconds: 300
+  },
+  {
+    action_key: 'restart_xagent',
+    name: '重启 xagent',
+    description: '重启 xagent 服务并校验 8888 端口',
+    script_path: '/opt/core-service/scripts/restart_xagent.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }),
+    role_scope: JSON.stringify(['ixvpn']),
+    risk_level: 'safe',
+    timeout_seconds: 120
+  },
+  {
+    action_key: 'restart_xbridge',
+    name: '重启 xbridge',
+    description: '重启 xvpn-bridge-server 服务并校验 8789 端口',
+    script_path: '/opt/core-service/scripts/restart_xbridge.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }),
+    role_scope: JSON.stringify(['xbridge']),
+    risk_level: 'safe',
+    timeout_seconds: 120
   }
 ];
 
