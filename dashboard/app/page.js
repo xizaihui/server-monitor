@@ -28,7 +28,7 @@ export default async function Page({ searchParams }) {
         <section className="hero compactHero crispHero refinedHero">
           <div>
             <h2 className="heroTitle compactHeroTitle">Nomo 节点监控</h2>
-            <div className="heroSubtitle">轻量、稳定、紧凑的节点状态面板</div>
+            <div className="heroSubtitle">更清晰、更统一的节点控制台</div>
           </div>
           <div className="heroMeta compactHeroMeta">
             <GroupFilter groups={groups} />

@@ -15,7 +15,7 @@ export default function LoginPage() {
       <div className="loginCard refinedLoginCard">
         <div className="loginBadge">Nomo Monitor</div>
         <div className="loginTitle">登录监控台</div>
-        <div className="loginDesc">输入访问令牌后进入节点控制台</div>
+        <div className="loginDesc">输入访问令牌后进入统一节点控制台</div>
         <div className="modalBody">
           <label className="fieldLabel">访问令牌</label>
           <input className="input fullInput" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="请输入 dashboard token" />
