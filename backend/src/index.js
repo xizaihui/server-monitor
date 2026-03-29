@@ -176,7 +176,13 @@ function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {})
     if (existing) {
       db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), existing.id);
     } else {
-      db.prepare(`INSERT INTO incidents(incident_key, dedupe_key, server_id, fault_type, severity, status, title, details, suggested_action, metadata) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`).run(incidentKey, dedupeKey, serverId, faultType, faultSeverity(faultType), faultTitle(serverId, faultType), String(issue), suggestAction(faultType), JSON.stringify(metadata || {}));
+      const inserted = db.prepare(`INSERT OR IGNORE INTO incidents(incident_key, dedupe_key, server_id, fault_type, severity, status, title, details, suggested_action, metadata) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`).run(incidentKey, dedupeKey, serverId, faultType, faultSeverity(faultType), faultTitle(serverId, faultType), String(issue), suggestAction(faultType), JSON.stringify(metadata || {}));
+      if (!inserted.changes) {
+        const current = db.prepare(`SELECT id FROM incidents WHERE dedupe_key = ? ORDER BY id DESC LIMIT 1`).get(dedupeKey);
+        if (current) {
+          db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), current.id);
+        }
+      }
     }
   }
   const openRows = db.prepare(`SELECT id, fault_type FROM incidents WHERE server_id = ? AND status IN ('open','acknowledged','auto_remediating','failed')`).all(serverId);
