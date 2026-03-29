@@ -86,6 +86,21 @@ var actionRegistry = map[string]ActionDef{
         TimeoutSec: 120,
         ParamOrder: []string{},
     },
+    "restart_redis": {
+        ScriptPath: "/opt/core-service/scripts/restart_redis.sh",
+        TimeoutSec: 120,
+        ParamOrder: []string{},
+    },
+    "install_redis": {
+        ScriptPath: "/opt/core-service/scripts/install_redis.sh",
+        TimeoutSec: 600,
+        ParamOrder: []string{},
+    },
+    "apply_cert": {
+        ScriptPath: "/opt/core-service/scripts/apply_cert.sh",
+        TimeoutSec: 600,
+        ParamOrder: []string{"server_ip"},
+    },
     "install_ixvpn": {
         ScriptPath: "/opt/core-service/scripts/install_ixvpn.sh",
         TimeoutSec: 600,

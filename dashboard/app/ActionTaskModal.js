@@ -45,6 +45,11 @@ export default function ActionTaskModal({ open, server, onClose, onCreated }) {
         { key: 'download_url', label: 'bridge 下载地址', placeholder: 'https://...' },
       ];
     }
+    if (actionKey === 'apply_cert') {
+      return [
+        { key: 'server_ip', label: '证书绑定 IP', placeholder: '例如 43.165.172.3' },
+      ];
+    }
     return [];
   }, [actionKey]);
 
@@ -60,6 +65,9 @@ export default function ActionTaskModal({ open, server, onClose, onCreated }) {
     }
     if (actionKey === 'install_xnftables') {
       return { server_id: form.server_id, download_url: form.download_url };
+    }
+    if (actionKey === 'apply_cert') {
+      return { server_ip: form.server_ip };
     }
     return {};
   }

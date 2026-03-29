@@ -66,6 +66,13 @@ const DEFAULT_ACTION_DEFINITIONS = [
     script_path: '/opt/core-service/scripts/install_redis.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['ixvpn', 'redis']),
     risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
     trigger_faults: JSON.stringify(['port_6379_down', 'component_missing']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'restart_redis', priority: 100, metadata: JSON.stringify({ install_url: 'http://38.75.137.157:8080/directlink/1/install_redis.sh' })
+  },
+  {
+    action_key: 'apply_cert', name: '申请证书', display_name: '申请证书', category: 'repair', description: '生成自签名证书并检查证书文件',
+    script_path: '/opt/core-service/scripts/apply_cert.sh',
+    param_schema: JSON.stringify({ required: ['server_ip'], properties: { server_ip: { type: 'string', format: 'ipv4' } } }),
+    role_scope: JSON.stringify(['ixvpn', 'xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/home/cert/Self-visa-certificate-no-domain-name-exists/server.crt', '/home/cert/Self-visa-certificate-no-domain-name-exists/server.key'] }), fallback_action_key: '', priority: 80, metadata: JSON.stringify({})
   }
 ];
 
