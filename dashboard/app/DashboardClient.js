@@ -284,10 +284,10 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                 <th className="highContrastHead">CPU</th>
                 <th className="highContrastHead">内存</th>
                 <th className="highContrastHead">磁盘</th>
-                <th className="portHead highContrastHead">443</th>
-                <th className="portHead highContrastHead">6379</th>
-                <th className="portHead highContrastHead">8888</th>
-                <th className="portHead highContrastHead">8789</th>
+                <th className="portHead highContrastHead">xray</th>
+                <th className="portHead highContrastHead">redis</th>
+                <th className="portHead highContrastHead">xagent</th>
+                <th className="portHead highContrastHead">xbridge</th>
                 <th className="highContrastHead">操作</th>
               </tr>
             </thead>
