@@ -51,5 +51,8 @@
 ## 工程化文档
 - 部署说明：`DEPLOY.md`
 - 运维排障：`OPERATIONS.md`
+- 环境变量：`ENV.md`
 - 变更记录：`CHANGELOG.md`
 - systemd 模板：`deploy/systemd/`
+- Nginx 模板：`deploy/nginx/`
+- 常用命令：`Makefile`

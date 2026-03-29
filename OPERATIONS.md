@@ -10,6 +10,8 @@ journalctl -u server-monitor-dashboard.service -n 100 --no-pager
 ss -ltnp | grep -E ':80|:3000|:8080'
 ```
 
+> 若当前 shell 环境中 `nginx` 不在 PATH，请直接使用 `/usr/sbin/nginx -t`。
+
 ## 健康检查
 
 ### Backend
@@ -80,3 +82,13 @@ curl http://127.0.0.1:8080/api/health
 3. 重启 systemd 服务
 4. 用 curl 验证 backend 与 Nginx 入口
 5. 再打开页面验证
+
+## 常用 Makefile 命令
+
+```bash
+make status
+make health
+make rebuild-backend-native
+make build-dashboard
+make restart
+```

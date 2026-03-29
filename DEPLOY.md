@@ -25,6 +25,9 @@
 
 可参考：
 - `scripts/remote-deploy.sh`
+- `deploy/systemd/`
+- `deploy/nginx/`
+- `ENV.md`
 
 该脚本会：
 - 安装 Node.js / Go / nginx（缺失时）
@@ -74,7 +77,7 @@ node /opt/server-monitor/dashboard/.next/standalone/server.js
 ```bash
 systemctl status server-monitor-backend.service
 systemctl status server-monitor-dashboard.service
-nginx -t
+/usr/sbin/nginx -t
 curl http://127.0.0.1:8080/api/health
 curl -I http://127.0.0.1/
 ```
