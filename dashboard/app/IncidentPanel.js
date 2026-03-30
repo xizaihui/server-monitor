@@ -204,6 +204,8 @@ export default function IncidentPanel({ open, onClose, onTriggerAction, initialS
           <span className="small">共 {items.length} 条{loading ? ' · 加载中...' : ''}</span>
         </div>
 
+        <div className="modalBody">
+
         {actionableItems.length > 0 ? (
           <div className="incidentBatchBar">
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
@@ -326,6 +328,7 @@ export default function IncidentPanel({ open, onClose, onTriggerAction, initialS
         ) : null}
 
         {taskDetailLoading ? <div className="small" style={{ padding: 12 }}>加载任务详情中...</div> : null}
+        </div>
       </div>
     </div>
   );
