@@ -23,15 +23,16 @@ export default async function Page({ searchParams }) {
   const { servers, groups, rules } = await getData(selectedGroup);
 
   return (
-    <div className="page compactPage">
-      <main className="content compactContent">
-        <section className="hero compactHero crispHero refinedHero">
-          <div>
-            <h2 className="heroTitle compactHeroTitle">Nomo 节点控制台</h2>
-            <div className="heroSubtitle">更清晰、更自然、更适合长时间阅读的运维界面</div>
-          </div>
-          <div className="heroMeta compactHeroMeta">
+    <div className="page">
+      <main className="content">
+        <section className="hero">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h2 className="heroTitle">Nomo 节点控制台</h2>
             <GroupFilter groups={groups} />
+          </div>
+          <div className="heroMeta">
+            <span className="liveDot"></span>
+            <span className="small">自动刷新 10s</span>
           </div>
         </section>
 
