@@ -11,6 +11,7 @@ import ActionTaskModal from './ActionTaskModal';
 import TaskHistoryModal from './TaskHistoryModal';
 import PackageUploadModal from './PackageUploadModal';
 import PackageRepoModal from './PackageRepoModal';
+import IncidentPanel from './IncidentPanel';
 
 const CURRENT_OPS_VERSION = '2026.03.29-1';
 
@@ -95,6 +96,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [rulesOpen, setRulesOpen] = useState(false);
   const [packageUploadOpen, setPackageUploadOpen] = useState(false);
   const [packageRepoOpen, setPackageRepoOpen] = useState(false);
+  const [incidentPanelOpen, setIncidentPanelOpen] = useState(false);
   const [packageRepoRefreshKey, setPackageRepoRefreshKey] = useState(0);
   const [rules, setRules] = useState(initialRules);
   const [toast, setToast] = useState(null);
@@ -267,6 +269,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           </div>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setGroupManagerOpen(true)}>分类管理</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setRulesOpen(true)}>监控规则</button>
+          <button className="primaryBtn compactPageBtn incidentBtn" type="button" onClick={() => setIncidentPanelOpen(true)}>🚨 Incidents</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageRepoOpen(true)}>包仓库</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageUploadOpen(true)}>上传安装包</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={refreshNow}>立即刷新</button>
@@ -401,6 +404,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       <TaskHistoryModal open={!!taskHistoryServer} server={taskHistoryServer} onClose={() => setTaskHistoryServer(null)} />
       <PackageRepoModal open={packageRepoOpen} refreshKey={packageRepoRefreshKey} onClose={() => setPackageRepoOpen(false)} />
       <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => { setPackageRepoRefreshKey((x) => x + 1); setPackageRepoOpen(true); setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` }); }} />
+      <IncidentPanel open={incidentPanelOpen} onClose={() => setIncidentPanelOpen(false)} />
     </>
   );
 }
