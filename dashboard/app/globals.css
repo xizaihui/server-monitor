@@ -462,22 +462,22 @@ button { -webkit-tap-highlight-color: transparent; cursor: pointer; }
 /* ── Table ── */
 table {
   width: 100%;
-  min-width: 760px;
+  min-width: 700px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
 }
 
-.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 760px; }
+.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 700px; }
 
-thead th:nth-child(1) { width: 32px; }
-thead th:nth-child(2) { width: 120px; }
-thead th:nth-child(3) { width: 64px; }
-thead th:nth-child(4) { width: 72px; }
-thead th:nth-child(5) { width: 82px; }
-thead th:nth-child(6), thead th:nth-child(7), thead th:nth-child(8) { width: 62px; }
-thead th:nth-child(9), thead th:nth-child(10), thead th:nth-child(11), thead th:nth-child(12) { width: 40px; }
-thead th:nth-child(13) { width: 48px; }
+thead th:nth-child(1) { width: 30px; }
+thead th:nth-child(2) { width: 110px; }
+thead th:nth-child(3) { width: 52px; }
+thead th:nth-child(4) { width: 64px; }
+thead th:nth-child(5) { width: 72px; }
+thead th:nth-child(6), thead th:nth-child(7), thead th:nth-child(8) { width: 52px; }
+thead th:nth-child(9), thead th:nth-child(10), thead th:nth-child(11), thead th:nth-child(12) { width: 36px; }
+thead th:nth-child(13) { width: 80px; position: sticky; right: 0; background: var(--color-bg); z-index: 2; }
 
 th, td {
   padding: 7px 4px;
@@ -530,9 +530,14 @@ tr:hover td { background: var(--color-border-subtle); }
   z-index: 3;
 }
 
-.stickyOffsetCol { left: 32px; width: 120px; }
+.stickyOffsetCol { left: 30px; width: 110px; }
 th.stickyCol { background: var(--color-bg); }
 .stickyBodyCol { background: inherit; box-shadow: 1px 0 0 0 var(--color-border-subtle); }
+
+/* Sticky right column (操作) */
+tbody td:last-child { position: sticky; right: 0; background: var(--color-surface); z-index: 2; box-shadow: -1px 0 0 0 var(--color-border-subtle); }
+tr.problemRow td:last-child { background: var(--color-danger-bg); }
+tr.offlineRow td:last-child { background: #f8f8f8; }
 
 /* ── Server cell ── */
 .ipCell, .compactIpCell, .onlyIpCell {
@@ -676,11 +681,11 @@ th.stickyCol { background: var(--color-bg); }
 
 /* ── Action column — more button ── */
 .menuWrap { display: flex; justify-content: center; }
-.actionButtonGroup { gap: 4px; align-items: center; justify-content: center; flex-wrap: nowrap; }
+.actionButtonGroup { gap: 2px; align-items: center; justify-content: center; flex-wrap: nowrap; }
 
 .iconButton, .compactIconButton {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -712,7 +717,7 @@ th.stickyCol { background: var(--color-bg); }
 
 .moreActionsBtn:hover { background: var(--color-border-subtle); color: var(--color-text); }
 
-.actionIcon { width: 13px; height: 13px; display: block; }
+.actionIcon { width: 12px; height: 12px; display: block; }
 
 /* ── Pagination ── */
 .paginationWrap, .compactPaginationWrap {
@@ -1052,14 +1057,14 @@ tr:hover .inlineCopyBtn { opacity: 1; }
 .incidentBatchBar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
 
 /* ── Incident History Chart ── */
-.incidentChartWrap { margin-top: 8px; }
+.incidentChartWrap { margin-top: 8px; overflow: hidden; }
 .incidentChartLegend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
-.incidentChart { display: flex; gap: 4px; align-items: flex-end; height: 180px; padding: 0 4px; border-bottom: 1px solid var(--color-border); }
-.incidentChartCol { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.incidentChartBars { width: 100%; height: 160px; display: flex; flex-direction: column; justify-content: flex-end; gap: 1px; }
-.incidentChartBar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; }
-.incidentChartLabel { text-align: center; color: var(--color-muted); font-size: 11px; }
-.incidentChartTotal { text-align: center; font-weight: 500; font-size: 12px; color: var(--color-text); }
+.incidentChart { display: flex; gap: 3px; align-items: flex-end; height: 200px; padding: 0 4px; border-bottom: 1px solid var(--color-border); overflow: hidden; }
+.incidentChartCol { flex: 1; min-width: 18px; max-width: 48px; display: flex; flex-direction: column; align-items: center; gap: 2px; height: 100%; }
+.incidentChartBars { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 1px; overflow: hidden; }
+.incidentChartBar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; flex-shrink: 0; }
+.incidentChartLabel { text-align: center; color: var(--color-muted); font-size: 10px; line-height: 1.2; white-space: nowrap; flex-shrink: 0; }
+.incidentChartTotal { text-align: center; font-weight: 500; font-size: 11px; color: var(--color-text); line-height: 1.2; flex-shrink: 0; }
 .incidentFaultGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
 .incidentFaultItem { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--color-bg); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); font-size: 12px; }
 
@@ -1082,5 +1087,5 @@ tr, td, .metricCompactCell, .portSquare, .badge, .iconButton { transition: none 
   .page { padding: 0 12px; }
   .drawerPanel, .modalCard, .largeModal, .loginCard { width: 100%; }
   .toast { left: 10px; right: 10px; top: 10px; }
-  table, .compactMainTable, .noTaskColTable { min-width: 760px; }
+  table, .compactMainTable, .noTaskColTable { min-width: 700px; }
 }

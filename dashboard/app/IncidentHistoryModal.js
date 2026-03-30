@@ -51,7 +51,7 @@ export default function IncidentHistoryModal({ open, onClose }) {
       <div className="modalCard largeModal" onClick={e => e.stopPropagation()}>
         <div className="drawerHeader">
           <div>
-            <div className="drawerTitle">📊 Incident 历史趋势</div>
+            <div className="drawerTitle">Incident 历史趋势</div>
             <div className="drawerSub">近 {days} 天 incident 统计</div>
           </div>
           <button className="iconButton" type="button" onClick={onClose}>×</button>
@@ -64,7 +64,7 @@ export default function IncidentHistoryModal({ open, onClose }) {
                 {d} 天
               </button>
             ))}
-            <button className="primaryBtn compactPageBtn" type="button" onClick={handleExport}>📥 导出 CSV</button>
+            <button className="primaryBtn compactPageBtn" type="button" onClick={handleExport}>导出 CSV</button>
             {stats ? <span className="small">总计 {stats.totalIncidents} 条 incident</span> : null}
           </div>
 
