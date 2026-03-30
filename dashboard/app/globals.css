@@ -590,10 +590,19 @@ tr.offlineRow td:last-child { background: #f8f8f8; }
   flex: 0 0 auto;
 }
 
-/* Static dots — no animations */
+/* Status dots */
 .statusDot.healthy { background: var(--color-success); }
-.statusDot.problem { background: var(--color-warning); }
-.statusDot.offline { background: var(--color-danger); }
+.statusDot.problem { background: var(--color-warning); animation: breathe-warning 2s ease-in-out infinite; box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.5); }
+.statusDot.offline { background: var(--color-danger); animation: breathe-danger 3s ease-in-out infinite; }
+
+@keyframes breathe-warning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(217, 119, 6, 0); }
+}
+@keyframes breathe-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+}
 
 .badge {
   display: inline-flex;
