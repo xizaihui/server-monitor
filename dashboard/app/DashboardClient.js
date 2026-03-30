@@ -126,7 +126,13 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [toast, setToast] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [incidentStats, setIncidentStats] = useState({ open: 0, remediating: 0, failed: 0, resolved: 0 });
-  const [alertSoundEnabled, setAlertSoundEnabled] = useState(true);
+  const [alertSoundEnabled, setAlertSoundEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('alertSoundEnabled');
+      if (saved !== null) return saved === '1';
+    }
+    return true;
+  });
   const [alertAcknowledged, setAlertAcknowledged] = useState(false);
   const [hasActiveProblems, setHasActiveProblems] = useState(false);
   const alertSoundRef = useRef(true);
@@ -400,6 +406,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
             onClick={() => {
               const next = !alertSoundEnabled;
               setAlertSoundEnabled(next);
+              localStorage.setItem('alertSoundEnabled', next ? '1' : '0');
               if (next) { setTimeout(playAlertSound, 100); }
               if (!next) setAlertAcknowledged(true);
             }}
