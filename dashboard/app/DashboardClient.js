@@ -107,7 +107,6 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [toast, setToast] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [incidentStats, setIncidentStats] = useState({ open: 0, remediating: 0, failed: 0, resolved: 0 });
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -271,124 +270,102 @@ export default function DashboardClient({ servers: initialServers, groups, selec
     setToast({ type: 'success', text: `已彻底删除节点 1 条，监控数据 ${Number(data?.deletedMetricRows || 0)} 条` });
   }
 
-  const totalIncidents = incidentStats.open + incidentStats.remediating + incidentStats.failed;
-
   return (
     <>
       {toast ? <div className={`toast ${toast.type}`}>{toast.text}</div> : null}
 
-      {/* ── Stats bar (compact horizontal) ── */}
       <section className="statsGrid">
         <div className="statCard"><span>总节点</span><strong>{stats.total}</strong></div>
         <div className="statCard healthy"><span>Healthy</span><strong>{stats.healthy}</strong></div>
         <div className="statCard problem"><span>Problem</span><strong>{stats.problem}</strong></div>
         <div className="statCard offline"><span>Offline</span><strong>{stats.offline}</strong></div>
-        <div className="statCard" style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
-          <span>Incidents</span><strong style={totalIncidents > 0 ? { color: '#DC2626' } : undefined}>{totalIncidents}</strong>
+      </section>
+
+      <section className="statsGrid incidentStatsGrid">
+        <div className={`statCard ${incidentStats.open > 0 ? 'problem' : 'healthy'}`} style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
+          <span>🚨 Open Incidents</span><strong>{incidentStats.open}</strong>
+        </div>
+        <div className={`statCard ${incidentStats.remediating > 0 ? 'problem' : ''}`} style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
+          <span>🔧 Remediating</span><strong>{incidentStats.remediating}</strong>
+        </div>
+        <div className={`statCard ${incidentStats.failed > 0 ? 'offline' : ''}`} style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
+          <span>❌ Failed</span><strong>{incidentStats.failed}</strong>
         </div>
         <div className="statCard" style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
-          <span>Resolved</span><strong>{incidentStats.resolved}</strong>
+          <span>✅ Resolved</span><strong>{incidentStats.resolved}</strong>
         </div>
       </section>
 
-      {/* ── Primary toolbar: Search + status filters ── */}
-      <section className="toolbar liveToolbar">
+      <section className="toolbar compactToolbar cleanToolbar liveToolbar">
         <div className="toolbarGroup">
-          <input className="input searchInput" placeholder="搜索 IP / server-id / 节点名 / 分类 / ID / 版本" value={query} onChange={(e) => onChangeQuery(e.target.value)} />
-          <div className="segmented">
-            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康'], ['scripts_missing', '未初始化'], ['scripts_outdated', '需更新']].map(([value, label]) => (
-              <button key={value} type="button" className={`segment ${status === value ? 'active' : ''}`} onClick={() => onChangeStatus(value)}>{label}</button>
+          <input className="input searchInput compactInput" placeholder="搜索 IP / server-id / 节点名 / 分类 / ID / 版本" value={query} onChange={(e) => onChangeQuery(e.target.value)} />
+          <div className="segmented compactSegmented">
+            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康'], ['scripts_missing', '脚本未初始化'], ['scripts_outdated', '脚本需更新']].map(([value, label]) => (
+              <button key={value} type="button" className={`segment compactSegment ${status === value ? 'active' : ''}`} onClick={() => onChangeStatus(value)}>{label}</button>
             ))}
           </div>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setGroupManagerOpen(true)}>分类管理</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setRulesOpen(true)}>监控规则</button>
+          <button className="primaryBtn compactPageBtn incidentBtn" type="button" onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>🚨 Incidents{incidentStats.open > 0 ? ` (${incidentStats.open})` : ''}</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setNotifSettingsOpen(true)}>🔔 通知</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setIncidentHistoryOpen(true)}>📊 趋势</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageRepoOpen(true)}>包仓库</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageUploadOpen(true)}>上传安装包</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={refreshNow}>立即刷新</button>
         </div>
-        <div className="toolbarGroup">
-          {/* Ops group */}
-          <button className="pageBtn" type="button" onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
-            Incidents{incidentStats.open > 0 ? ` (${incidentStats.open})` : ''}
-          </button>
-          <button className="pageBtn" type="button" onClick={() => setIncidentHistoryOpen(true)}>趋势</button>
-
-          {/* Settings dropdown */}
-          <div className="settingsDropdown">
-            <button className="pageBtn" type="button" onClick={() => setSettingsOpen(!settingsOpen)}>设置</button>
-            {settingsOpen && (
-              <div className="settingsDropdownMenu">
-                <button className="settingsDropdownItem" type="button" onClick={() => { setRulesOpen(true); setSettingsOpen(false); }}>监控规则</button>
-                <button className="settingsDropdownItem" type="button" onClick={() => { setNotifSettingsOpen(true); setSettingsOpen(false); }}>通知设置</button>
-                <button className="settingsDropdownItem" type="button" onClick={() => { setPackageRepoOpen(true); setSettingsOpen(false); }}>包仓库</button>
-                <button className="settingsDropdownItem" type="button" onClick={() => { setGroupManagerOpen(true); setSettingsOpen(false); }}>分类管理</button>
-              </div>
-            )}
-          </div>
-
-          {/* Live info */}
+        <div className="toolbarGroup small liveInfo">
           <span className="liveDot"></span>
-          <span className="small">10s</span>
-          <span className="small">共 {filtered.length} 台</span>
+          <span>自动刷新 10s</span>
+          <span>每页</span>
           <select className="select compactSelect" value={pageSize} onChange={(e) => onChangePageSize(e.target.value)}>
             {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
+          <span>脚本目标版本 {CURRENT_OPS_VERSION}</span>
+          <span>共 {filtered.length} 台</span>
         </div>
       </section>
 
-      {/* Close settings dropdown when clicking outside */}
-      {settingsOpen && <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onClick={() => setSettingsOpen(false)} />}
+      <section className="bulkBar unifiedBulkBar taskSubmitBar">
+        <div className="toolbarGroup">
+          <div className="small">统一部署入口：先勾选节点，再点击提交</div>
+          {selectedIds.length > 0 ? <div className="small">当前已选 {selectedIds.length} 个节点</div> : <div className="small">当前未选择节点</div>}
+        </div>
+        <div className="toolbarGroup">
+          <button className="primaryBtn compactPageBtn" type="button" onClick={() => { setTaskInitialActionKey(''); setTaskServers(selectedServers); }} disabled={!selectedServers.length || bulkBusy}>递交</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => { setTaskInitialActionKey('init_ops_scripts'); setTaskServers(selectedServers); }} disabled={!selectedServers.length || bulkBusy}>初始化脚本</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => { setTaskInitialActionKey('init_ops_scripts'); setTaskServers(scriptActionableServers); }} disabled={!scriptActionableServers.length || bulkBusy}>初始化未就绪节点</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setBulkMoveOpen(true)} disabled={bulkBusy || !selectedIds.length}>移动分类</button>
+          <button className="dangerBtn compactPageBtn" type="button" onClick={bulkDelete} disabled={bulkBusy || !selectedIds.length}>{bulkBusy ? '处理中...' : '删除节点'}</button>
+        </div>
+      </section>
 
-      {/* ── Bulk action bar (only when items selected) ── */}
-      {selectedIds.length > 0 && (
-        <section className="bulkBar unifiedBulkBar taskSubmitBar">
-          <div className="toolbarGroup">
-            <span className="small">已选 {selectedIds.length} 个节点</span>
-          </div>
-          <div className="toolbarGroup">
-            <button className="primaryBtn" type="button" onClick={() => { setTaskInitialActionKey(''); setTaskServers(selectedServers); }} disabled={!selectedServers.length || bulkBusy}>递交</button>
-            <button className="pageBtn" type="button" onClick={() => { setTaskInitialActionKey('init_ops_scripts'); setTaskServers(selectedServers); }} disabled={!selectedServers.length || bulkBusy}>初始化脚本</button>
-            <button className="pageBtn" type="button" onClick={() => setBulkMoveOpen(true)} disabled={bulkBusy || !selectedIds.length}>移动分类</button>
-            <button className="dangerBtn" type="button" onClick={bulkDelete} disabled={bulkBusy || !selectedIds.length}>{bulkBusy ? '处理中...' : '删除节点'}</button>
-          </div>
-        </section>
-      )}
-
-      {/* ── Init scripts quick action (always available) ── */}
-      {scriptActionableServers.length > 0 && selectedIds.length === 0 && (
-        <section className="bulkBar taskSubmitBar">
-          <div className="toolbarGroup">
-            <span className="small">{scriptActionableServers.length} 个节点脚本未就绪</span>
-          </div>
-          <div className="toolbarGroup">
-            <button className="pageBtn" type="button" onClick={() => { setTaskInitialActionKey('init_ops_scripts'); setTaskServers(scriptActionableServers); }} disabled={!scriptActionableServers.length || bulkBusy}>初始化未就绪节点</button>
-          </div>
-        </section>
-      )}
-
-      {/* ── Table ── */}
-      <section className="panel">
-        <div className="tableHeader">
-          <div className="tableTitle">节点列表</div>
-          <div className="paginationWrap">
-            <button className="pageBtn" type="button" onClick={() => goPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>上一页</button>
-            {pageNumbers.map((n) => <button key={n} className={`pageBtn ${currentPage === n ? 'activePageBtn' : ''}`} type="button" onClick={() => goPage(n)}>{n}</button>)}
-            <button className="pageBtn" type="button" onClick={() => goPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>下一页</button>
+      <section className="panel compactPanel cleanPanel">
+        <div className="tableHeader compactTableHeader">
+          <div><div className="tableTitle highContrastTitle">节点列表</div></div>
+          <div className="paginationWrap compactPaginationWrap">
+            <button className="pageBtn compactPageBtn" type="button" onClick={() => goPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>上一页</button>
+            {pageNumbers.map((n) => <button key={n} className={`pageBtn compactPageBtn ${currentPage === n ? 'activePageBtn' : ''}`} type="button" onClick={() => goPage(n)}>{n}</button>)}
+            <button className="pageBtn compactPageBtn" type="button" onClick={() => goPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>下一页</button>
           </div>
         </div>
 
-        <div className="tableWrap">
-          <table className="compactMainTable noTaskColTable">
+        <div className="tableWrap denseTableWrap pagedTableWrap cleanerTableWrap">
+          <table className="denseTable cleanerTable compactMainTable noTaskColTable">
             <thead>
               <tr>
                 <th className="stickyCol checkboxCol"><input type="checkbox" checked={allPageSelected} onChange={toggleAllPage} /></th>
-                <th className="stickyCol">服务器</th>
-                <th>server-id</th>
-                <th>状态</th>
-                <th>脚本版本</th>
-                <th>CPU</th>
-                <th>内存</th>
-                <th>磁盘</th>
-                <th className="portHead">xray</th>
-                <th className="portHead">redis</th>
-                <th className="portHead">xagent</th>
-                <th className="portHead">xbridge</th>
-                <th>操作</th>
+                <th className="stickyCol highContrastHead">服务器</th>
+                <th className="highContrastHead">server-id</th>
+                <th className="highContrastHead">状态</th>
+                <th className="highContrastHead">脚本版本</th>
+                <th className="highContrastHead">CPU</th>
+                <th className="highContrastHead">内存</th>
+                <th className="highContrastHead">磁盘</th>
+                <th className="portHead highContrastHead">xray</th>
+                <th className="portHead highContrastHead">redis</th>
+                <th className="portHead highContrastHead">xagent</th>
+                <th className="portHead highContrastHead">xbridge</th>
+                <th className="highContrastHead">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -396,31 +373,33 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                 const sb = scriptsBadge(s);
                 const rb = readinessBadge(s);
                 return (
-                <tr key={s.server_id} className={`${s.status === 'problem' ? 'problemRow' : s.status === 'offline' ? 'offlineRow' : ''}`}>
+                <tr key={s.server_id} className={`${s.status === 'problem' ? 'problemRow' : s.status === 'offline' ? 'offlineRow' : ''} compactRow`}>
                   <td className="stickyCol stickyBodyCol checkboxCol"><input type="checkbox" checked={selectedIds.includes(s.server_id)} onChange={() => toggleOne(s.server_id)} /></td>
-                  <td className="stickyCol stickyBodyCol stickyOffsetCol">
+                  <td className="stickyCol stickyBodyCol compactStickyCol stickyOffsetCol">
                     <div className="ipActionRow">
-                      <button type="button" className="nodeLinkBtn" onClick={() => setSelectedServer(s)}>
-                        <div className="ipCell sharpText">{s.ip || '-'}</div>
+                      <button type="button" className="nodeLinkBtn cleanNodeLinkBtn" onClick={() => setSelectedServer(s)}>
+                        <div className="ipCell compactIpCell onlyIpCell sharpText">{s.ip || '-'}</div>
                       </button>
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
+                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span></div>
+                    <div className="small versionSubline">{targetGap(s)}</div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
                   <td>
-                    <div className="statusStack">
+                    <div className="statusStack compactStatusStack">
                       <span className={`statusDot ${s.status}`}></span>
-                      <span className={`badge ${s.status}`}>{s.status === 'healthy' ? 'Healthy' : s.status === 'problem' ? 'Problem' : 'Offline'}</span>
+                      <span className={`badge ${s.status} compactBadge`}>{s.status === 'healthy' ? 'Healthy' : s.status === 'problem' ? 'Problem' : 'Offline'}</span>
                     </div>
                   </td>
                   <td><span className={`badge ${sb.tone}`}>{sb.text}</span></td>
                   <td><MetricBar value={s.cpu_usage} alert={hasIssue(s, 'CPU')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.memory_usage} alert={hasIssue(s, '内存')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.disk_usage} alert={hasIssue(s, '磁盘')} offline={s.status === 'offline'} /></td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare ${s.port_6379 ? 'up' : 'down'}`}>{s.port_6379 ? 'UP' : 'DOWN'}</span>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_6379 ? 'up' : 'down'}`}>{s.port_6379 ? 'UP' : 'DOWN'}</span>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>}</td>
                   <td>
                     <ServerActions server={s} compact onEdit={setEditServer} onDelete={setDeleteServer} onTaskHistory={setTaskHistoryServer} />
                   </td>
@@ -431,12 +410,12 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           </table>
         </div>
 
-        <div className="paginationFooter">
+        <div className="paginationFooter compactPaginationFooter">
           <div className="small">显示 {(currentPage - 1) * pageSize + (paged.length ? 1 : 0)} - {(currentPage - 1) * pageSize + paged.length} / {filtered.length}</div>
-          <div className="paginationWrap">
-            <button className="pageBtn" type="button" onClick={() => goPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>上一页</button>
-            {pageNumbers.map((n) => <button key={n} className={`pageBtn ${currentPage === n ? 'activePageBtn' : ''}`} type="button" onClick={() => goPage(n)}>{n}</button>)}
-            <button className="pageBtn" type="button" onClick={() => goPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>下一页</button>
+          <div className="paginationWrap compactPaginationWrap">
+            <button className="pageBtn compactPageBtn" type="button" onClick={() => goPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>上一页</button>
+            {pageNumbers.map((n) => <button key={n} className={`pageBtn compactPageBtn ${currentPage === n ? 'activePageBtn' : ''}`} type="button" onClick={() => goPage(n)}>{n}</button>)}
+            <button className="pageBtn compactPageBtn" type="button" onClick={() => goPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>下一页</button>
           </div>
         </div>
       </section>
