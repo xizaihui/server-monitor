@@ -442,7 +442,7 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
         diag = collectDiagnostics(cpuUsage > 80, memUsage > 85, diskUsage > 55)
     }
 
-    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.7.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion}, Diagnostics: diag}, nil
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.8.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion}, Diagnostics: diag}, nil
 }
 
 func collectDiagnostics(cpuAlert, memAlert, diskAlert bool) *Diagnostics {
