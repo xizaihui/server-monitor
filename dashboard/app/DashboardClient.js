@@ -86,20 +86,30 @@ function getAudioCtx() {
   if (!_audioCtx) {
     _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  if (_audioCtx.state === 'suspended') _audioCtx.resume();
   return _audioCtx;
+}
+
+// Must be called from a user gesture to unlock AudioContext
+function unlockAudio() {
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+  } catch {}
 }
 
 function playAlertSound() {
   try {
     const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') return; // not unlocked yet
     const now = ctx.currentTime;
-    // Two-tone urgent beep pattern: beep-beep, pause, beep-beep
+    // Urgent alert: three rising beep pairs
     const pattern = [
-      { freq: 880, start: 0, dur: 0.12 },
-      { freq: 880, start: 0.18, dur: 0.12 },
-      { freq: 1100, start: 0.45, dur: 0.12 },
-      { freq: 1100, start: 0.63, dur: 0.12 },
+      { freq: 800, start: 0, dur: 0.15 },
+      { freq: 800, start: 0.2, dur: 0.15 },
+      { freq: 1000, start: 0.5, dur: 0.15 },
+      { freq: 1000, start: 0.7, dur: 0.15 },
+      { freq: 1200, start: 1.0, dur: 0.15 },
+      { freq: 1200, start: 1.2, dur: 0.15 },
     ];
     for (const { freq, start, dur } of pattern) {
       const osc = ctx.createOscillator();
@@ -107,13 +117,13 @@ function playAlertSound() {
       osc.type = 'square';
       osc.frequency.value = freq;
       gain.gain.setValueAtTime(0, now + start);
-      gain.gain.linearRampToValueAtTime(0.15, now + start + 0.01);
-      gain.gain.setValueAtTime(0.15, now + start + dur - 0.02);
+      gain.gain.linearRampToValueAtTime(0.35, now + start + 0.02);
+      gain.gain.setValueAtTime(0.35, now + start + dur - 0.03);
       gain.gain.linearRampToValueAtTime(0, now + start + dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now + start);
-      osc.stop(now + start + dur);
+      osc.stop(now + start + dur + 0.01);
     }
   } catch {}
 }
@@ -150,6 +160,17 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const prevProblemIdsRef = useRef(null);
 
   useEffect(() => { alertSoundRef.current = alertSoundEnabled; }, [alertSoundEnabled]);
+
+  // Unlock AudioContext on first user interaction (Chrome autoplay policy)
+  useEffect(() => {
+    const handler = () => { unlockAudio(); };
+    document.addEventListener('click', handler, { once: true });
+    document.addEventListener('keydown', handler, { once: true });
+    return () => {
+      document.removeEventListener('click', handler);
+      document.removeEventListener('keydown', handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -372,7 +393,11 @@ export default function DashboardClient({ servers: initialServers, groups, selec
             type="button"
             className={`alertSoundToggle ${alertSoundEnabled ? 'on' : 'off'}`}
             title={alertSoundEnabled ? '报警声音已开启' : '报警声音已关闭'}
-            onClick={() => setAlertSoundEnabled(!alertSoundEnabled)}
+            onClick={() => {
+              const next = !alertSoundEnabled;
+              setAlertSoundEnabled(next);
+              if (next) { unlockAudio(); setTimeout(playAlertSound, 100); }
+            }}
           >
             {alertSoundEnabled ? '🔔' : '🔕'}
           </button>
