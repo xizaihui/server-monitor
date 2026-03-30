@@ -16,6 +16,40 @@ const METRICS_RETENTION_DAYS = Number(process.env.METRICS_RETENTION_DAYS || 30);
 const DEFAULT_GROUP = '未分组';
 const DOWNLOAD_BASE_URL = process.env.DOWNLOAD_BASE_URL || 'http://43.165.172.3/downloads';
 const DOWNLOAD_ROOT = process.env.DOWNLOAD_ROOT || '/var/www/server-monitor-downloads';
+
+function getNotificationSettings() {
+  const row = db.prepare(`SELECT value FROM settings WHERE key = 'notification_settings'`).get();
+  if (!row) return { enabled: false, webhook_urls: [], notify_on: ['open', 'failed'] };
+  try { return JSON.parse(row.value); } catch { return { enabled: false, webhook_urls: [], notify_on: ['open', 'failed'] }; }
+}
+
+async function sendIncidentNotification(incident, event) {
+  const settings = getNotificationSettings();
+  if (!settings.enabled || !Array.isArray(settings.webhook_urls) || !settings.webhook_urls.length) return;
+  if (Array.isArray(settings.notify_on) && !settings.notify_on.includes(event)) return;
+  const payload = {
+    event,
+    timestamp: new Date().toISOString(),
+    incident: {
+      id: incident.id,
+      server_id: incident.server_id,
+      fault_type: incident.fault_type,
+      severity: incident.severity,
+      status: incident.status,
+      title: incident.title,
+      details: incident.details,
+      suggested_action: incident.suggested_action,
+      first_seen_at: incident.first_seen_at,
+      last_seen_at: incident.last_seen_at,
+    }
+  };
+  for (const url of settings.webhook_urls) {
+    if (!url || typeof url !== 'string') continue;
+    try {
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+    } catch {}
+  }
+}
 const DEFAULT_RULES = {
   cpu: { enabled: true, threshold: 85, consecutive: 1 },
   memory: { enabled: true, threshold: 90, consecutive: 1 },
@@ -179,8 +213,14 @@ function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {})
       const resolvedExisting = db.prepare(`SELECT id FROM incidents WHERE dedupe_key = ? AND status = 'resolved' ORDER BY id DESC LIMIT 1`).get(dedupeKey);
       if (resolvedExisting) {
         db.prepare(`UPDATE incidents SET status = 'open', resolved_at = NULL, last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, action_task_id = '', metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), resolvedExisting.id);
+        const reopened = db.prepare(`SELECT * FROM incidents WHERE id = ?`).get(resolvedExisting.id);
+        if (reopened) sendIncidentNotification(reopened, 'open');
       } else {
         const inserted = db.prepare(`INSERT OR IGNORE INTO incidents(incident_key, dedupe_key, server_id, fault_type, severity, status, title, details, suggested_action, metadata) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`).run(incidentKey, dedupeKey, serverId, faultType, faultSeverity(faultType), faultTitle(serverId, faultType), String(issue), suggestAction(faultType), JSON.stringify(metadata || {}));
+        if (inserted.changes) {
+          const newInc = db.prepare(`SELECT * FROM incidents WHERE incident_key = ?`).get(incidentKey);
+          if (newInc) sendIncidentNotification(newInc, 'open');
+        }
         if (!inserted.changes) {
           const current = db.prepare(`SELECT id FROM incidents WHERE dedupe_key = ? ORDER BY id DESC LIMIT 1`).get(dedupeKey);
           if (current) {
@@ -201,6 +241,24 @@ function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {})
 app.get('/api/health', (req, res) => res.json({ ok: true, hostname: os.hostname(), port: PORT, offlineAfterSeconds: OFFLINE_AFTER_SECONDS, metricsRetentionDays: METRICS_RETENTION_DAYS }));
 app.get('/api/settings/monitor-rules', authMiddleware, (req, res) => res.json(getRules()));
 app.patch('/api/settings/monitor-rules', authMiddleware, (req, res) => { const body = req.body || {}; const nextRules = Object.fromEntries(Object.entries(DEFAULT_RULES).map(([key, val]) => [key, { ...val, ...(body[key] || {}) }])); db.prepare(`UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'monitor_rules'`).run(JSON.stringify(nextRules)); res.json({ ok: true, rules: nextRules }); });
+
+app.get('/api/settings/notifications', authMiddleware, (req, res) => res.json(getNotificationSettings()));
+app.patch('/api/settings/notifications', authMiddleware, (req, res) => {
+  const body = req.body || {};
+  const current = getNotificationSettings();
+  const next = {
+    enabled: body.enabled !== undefined ? !!body.enabled : current.enabled,
+    webhook_urls: Array.isArray(body.webhook_urls) ? body.webhook_urls.filter(u => typeof u === 'string' && u.trim()) : current.webhook_urls,
+    notify_on: Array.isArray(body.notify_on) ? body.notify_on : current.notify_on,
+  };
+  const existing = db.prepare(`SELECT key FROM settings WHERE key = 'notification_settings'`).get();
+  if (existing) {
+    db.prepare(`UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'notification_settings'`).run(JSON.stringify(next));
+  } else {
+    db.prepare(`INSERT INTO settings(key, value) VALUES ('notification_settings', ?)`).run(JSON.stringify(next));
+  }
+  res.json({ ok: true, settings: next });
+});
 app.get('/api/actions/definitions', authMiddleware, (req, res) => { const rows = db.prepare(`SELECT action_key, name, display_name, category, description, param_schema, role_scope, risk_level, timeout_seconds, executor_type, cooldown_seconds, max_retries, auto_enabled, requires_approval, batch_enabled, trigger_faults, success_criteria, fallback_action_key, priority, metadata FROM action_definitions WHERE enabled = 1 ORDER BY priority ASC, id ASC`).all(); res.json(rows.map((row) => ({ ...row, role_scope: JSON.parse(row.role_scope || '[]'), param_schema: JSON.parse(row.param_schema || '{}'), trigger_faults: JSON.parse(row.trigger_faults || '[]'), success_criteria: JSON.parse(row.success_criteria || '{}'), metadata: JSON.parse(row.metadata || '{}') }))); });
 app.get('/api/incidents', authMiddleware, (req, res) => { const { status, server_id, limit } = req.query || {}; const where = []; const params = []; if (status) { where.push('status = ?'); params.push(status); } if (server_id) { where.push('server_id = ?'); params.push(server_id); } const sql = `SELECT * FROM incidents ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY last_seen_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200))); res.json(db.prepare(sql).all(...params)); });
 app.get('/api/packages/checksums', authMiddleware, (req, res) => {
@@ -384,12 +442,13 @@ app.post('/api/incidents/:id/trigger', authMiddleware, (req, res) => {
   return res.json({ ok: true, task_id: taskId, status: 'pending', incident_status: 'auto_remediating' });
 });
 app.post('/api/agent/tasks/:taskId/result', (req, res) => { const taskId = req.params.taskId; const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const leaseToken = String(body.lease_token || '').trim(); const status = String(body.status || '').trim(); if (!['success', 'failed', 'timeout', 'cancelled'].includes(status)) return res.status(400).json({ error: 'invalid status' }); const task = db.prepare(`SELECT * FROM action_tasks WHERE task_id = ?`).get(taskId); if (!task) return res.status(404).json({ error: 'task not found' }); if (task.server_id !== serverId || task.lease_token !== leaseToken) return res.status(403).json({ error: 'invalid lease' }); db.prepare(`UPDATE action_tasks SET status = ?, exit_code = ?, result_code = ?, result_summary = ?, log_excerpt = ?, error_message = ?, finished_at = ?, lease_token = '', lease_expires_at = NULL WHERE task_id = ?`).run(status, body.exit_code == null ? null : Number(body.exit_code), String(body.result_code || ''), String(body.result_summary || ''), String(body.log_excerpt || '').slice(-8000), String(body.error_message || ''), new Date().toISOString(), taskId);
-  const linkedIncident = db.prepare(`SELECT id, status FROM incidents WHERE action_task_id = ? AND status = 'auto_remediating'`).get(taskId);
+  const linkedIncident = db.prepare(`SELECT * FROM incidents WHERE action_task_id = ? AND status = 'auto_remediating'`).get(taskId);
   if (linkedIncident) {
     if (status === 'success') {
       db.prepare(`UPDATE incidents SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(linkedIncident.id);
     } else {
       db.prepare(`UPDATE incidents SET status = 'failed', last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(linkedIncident.id);
+      sendIncidentNotification({ ...linkedIncident, status: 'failed' }, 'failed');
     }
   }
   res.json({ ok: true }); });
