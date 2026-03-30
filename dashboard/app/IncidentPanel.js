@@ -16,6 +16,8 @@ const STATUS_OPTIONS = [
   { value: 'open', label: '🔴 Open' },
   { value: 'acknowledged', label: '🟡 Acknowledged' },
   { value: 'auto_remediating', label: '🔧 Remediating' },
+  { value: 'takeover_pending', label: '🤖 接管中' },
+  { value: 'takeover_active', label: '🤖 AI修复中' },
   { value: 'failed', label: '❌ Failed' },
   { value: 'resolved', label: '✅ Resolved' },
 ];
@@ -25,6 +27,7 @@ const SEVERITY_BADGE = { critical: 'offline', warning: 'problem', info: 'healthy
 function statusBadgeClass(status) {
   if (status === 'open') return 'offline';
   if (status === 'acknowledged' || status === 'auto_remediating') return 'problem';
+  if (status === 'takeover_pending' || status === 'takeover_active') return 'problem';
   if (status === 'failed') return 'offline';
   if (status === 'resolved') return 'healthy';
   return '';
@@ -68,6 +71,29 @@ export default function IncidentPanel({ open, onClose, onTriggerAction, initialS
       setItems([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleTakeover(incident) {
+    if (!confirm(`确认由 OpenClaw 远程接管修复此故障？\n\n节点: ${incident.server_id}\n故障: ${incident.fault_type}\n\n将创建临时 sudo 用户，AI 通过 SSH 远程修复，修复后自动清理。`)) return;
+    setTriggerBusy((prev) => ({ ...prev, [incident.id]: true }));
+    setTriggerResult((prev) => ({ ...prev, [incident.id]: null }));
+    try {
+      const res = await fetch('/api/proxy/incidents/' + incident.id + '/takeover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setTriggerResult((prev) => ({ ...prev, [incident.id]: { ok: true, task_id: data.task_id, status: 'takeover: ' + data.phase } }));
+        setTimeout(loadIncidents, 2000);
+      } else {
+        setTriggerResult((prev) => ({ ...prev, [incident.id]: { ok: false, error: data.error || '接管失败' } }));
+      }
+    } catch (e) {
+      setTriggerResult((prev) => ({ ...prev, [incident.id]: { ok: false, error: e.message } }));
+    } finally {
+      setTriggerBusy((prev) => ({ ...prev, [incident.id]: false }));
     }
   }
 
@@ -242,11 +268,22 @@ export default function IncidentPanel({ open, onClose, onTriggerAction, initialS
                         type="button"
                         onClick={() => loadTaskDetail(item.action_task_id)}
                       >
-                        📋 查看关联任务
+                        查看关联任务
                       </button>
                     ) : null}
 
-                    {!item.suggested_action && item.status !== 'resolved' ? (
+                    {(item.status === 'failed' || item.status === 'open') ? (
+                      <button
+                        className="dangerBtn compactPageBtn takeoverBtn"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleTakeover(item)}
+                      >
+                        {busy ? '接管中...' : 'OpenClaw 接管'}
+                      </button>
+                    ) : null}
+
+                    {!item.suggested_action && item.status !== 'resolved' && item.status !== 'failed' ? (
                       <span className="small" style={{ opacity: 0.5 }}>暂无建议动作</span>
                     ) : null}
                   </div>

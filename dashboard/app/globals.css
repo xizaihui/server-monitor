@@ -417,6 +417,14 @@ button { -webkit-tap-highlight-color: transparent; cursor: pointer; }
 
 .dangerBtn:hover { background: var(--color-danger-bg); }
 
+.takeoverBtn {
+  background: #1a1a2e !important;
+  color: #e0e0ff !important;
+  border-color: #4a4a8a !important;
+  font-weight: 500;
+}
+.takeoverBtn:hover { background: #2a2a4e !important; }
+
 .incidentBtn.primaryBtn, .incidentBtn {
   background: var(--color-danger);
   color: #fff;

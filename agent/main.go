@@ -138,6 +138,16 @@ var actionRegistry = map[string]ActionDef{
         TimeoutSec: 120,
         ParamOrder: []string{"download_base"},
     },
+    "create_temp_user": {
+        ScriptPath: "/opt/core-service/scripts/create_temp_user.sh",
+        TimeoutSec: 30,
+        ParamOrder: []string{"public_key"},
+    },
+    "delete_temp_user": {
+        ScriptPath: "/opt/core-service/scripts/delete_temp_user.sh",
+        TimeoutSec: 15,
+        ParamOrder: []string{"username"},
+    },
 }
 
 func main() {

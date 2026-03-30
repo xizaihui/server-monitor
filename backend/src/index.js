@@ -124,6 +124,20 @@ const DEFAULT_ACTION_DEFINITIONS = [
     param_schema: JSON.stringify({ required: ['download_base'], properties: { download_base: { type: 'string', format: 'url' } } }),
     role_scope: JSON.stringify(['xagent', 'xbridge', 'redis']), risk_level: 'guarded', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 300, max_retries: 0, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
     trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({}), fallback_action_key: '', priority: 10, metadata: JSON.stringify({ download_base: `${DOWNLOAD_BASE_URL}` })
+  },
+  {
+    action_key: 'create_temp_user', name: '创建临时用户', display_name: '创建临时用户', category: 'takeover', description: '为 OpenClaw 接管创建临时 sudo 用户',
+    script_path: '/opt/core-service/scripts/create_temp_user.sh',
+    param_schema: JSON.stringify({ required: ['public_key'], properties: { public_key: { type: 'string' } } }),
+    role_scope: JSON.stringify([]), risk_level: 'critical', timeout_seconds: 30, executor_type: 'agent', cooldown_seconds: 60, max_retries: 0, auto_enabled: 0, requires_approval: 0, batch_enabled: 0,
+    trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({}), fallback_action_key: '', priority: 1, metadata: JSON.stringify({})
+  },
+  {
+    action_key: 'delete_temp_user', name: '删除临时用户', display_name: '删除临时用户', category: 'takeover', description: '删除 OpenClaw 接管创建的临时用户',
+    script_path: '/opt/core-service/scripts/delete_temp_user.sh',
+    param_schema: JSON.stringify({ required: ['username'], properties: { username: { type: 'string' } } }),
+    role_scope: JSON.stringify([]), risk_level: 'safe', timeout_seconds: 15, executor_type: 'agent', cooldown_seconds: 0, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 0,
+    trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({}), fallback_action_key: '', priority: 1, metadata: JSON.stringify({})
   }
 ];
 
@@ -514,6 +528,65 @@ app.post('/api/incidents/:id/trigger', authMiddleware, (req, res) => {
   db.prepare(`UPDATE incidents SET action_task_id = ?, status = 'auto_remediating', last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskId, incidentId);
   return res.json({ ok: true, task_id: taskId, status: 'pending', incident_status: 'auto_remediating' });
 });
+
+/* ── OpenClaw Takeover orchestration ── */
+const OPENCLAW_HOOKS_URL = process.env.OPENCLAW_HOOKS_URL || 'http://127.0.0.1:18789/hooks/agent';
+const OPENCLAW_HOOKS_TOKEN = process.env.OPENCLAW_HOOKS_TOKEN || 'd016de478d281af6298258bc6c079c71c38c9966a07bda09';
+const OPENCLAW_PUBLIC_KEY = process.env.OPENCLAW_PUBLIC_KEY || 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBWoDH7XZftj7ijIvQXXd4JMFJRP/wI0d9XSaXcOkV3Q server-monitor';
+
+app.post('/api/incidents/:id/takeover', authMiddleware, async (req, res) => {
+  const incidentId = req.params.id;
+  const incident = db.prepare(`SELECT * FROM incidents WHERE id = ?`).get(incidentId);
+  if (!incident) return res.status(404).json({ error: 'incident not found' });
+  if (incident.status === 'resolved') return res.status(400).json({ error: 'incident already resolved' });
+
+  const serverId = incident.server_id;
+  const server = db.prepare(`SELECT * FROM servers WHERE server_id = ?`).get(serverId);
+  if (!server) return res.status(404).json({ error: 'server not found' });
+
+  // Check no active task on this server
+  const activeTask = db.prepare(`SELECT task_id, status, action_key FROM action_tasks WHERE server_id = ? AND status IN ('pending', 'leased', 'running') LIMIT 1`).get(serverId);
+  if (activeTask) return res.status(409).json({ error: 'server has active task', activeTask });
+
+  // Gather diagnostics
+  const serverMeta = JSON.parse(server.metadata || '{}');
+  const serverDiag = JSON.parse(server.diagnostics || '{}');
+  const incidentMeta = JSON.parse(incident.metadata || '{}');
+  const recentMetrics = db.prepare(`SELECT cpu_usage, memory_usage, disk_usage, issues, created_at FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT 5`).all(serverId);
+  const recentTasks = db.prepare(`SELECT action_key, status, result_code, result_summary, finished_at FROM action_tasks WHERE server_id = ? ORDER BY created_at DESC LIMIT 5`).all(serverId);
+
+  // Step 1: Create temp user task
+  const createTaskId = genTaskId();
+  db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, parent_incident_id, metadata) VALUES (?, ?, 'create_temp_user', ?, 'pending', 'takeover', 'openclaw-takeover', 1, 30, ?, ?)`).run(
+    createTaskId, serverId, JSON.stringify({ public_key: OPENCLAW_PUBLIC_KEY }), String(incident.incident_key || ''),
+    JSON.stringify({ takeover_incident_id: incidentId, phase: 'create_user' })
+  );
+
+  // Update incident status
+  db.prepare(`UPDATE incidents SET status = 'takeover_pending', action_task_id = ?, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(createTaskId, incidentId);
+
+  // Store takeover context for later use when user is created
+  const takeoverContext = {
+    incident_id: incidentId,
+    incident_key: incident.incident_key,
+    server_id: serverId,
+    server_ip: server.ip,
+    hostname: server.hostname,
+    fault_type: incident.fault_type,
+    title: incident.title,
+    details: incident.details,
+    issues: JSON.parse(db.prepare(`SELECT issues FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT 1`).get(serverId)?.issues || '[]'),
+    diagnostics: serverDiag,
+    recent_tasks: recentTasks,
+    agent_version: serverMeta.agent_version || '',
+    create_task_id: createTaskId,
+  };
+  // Store in a simple in-memory map (keyed by create_task_id)
+  if (!global._takeoverContexts) global._takeoverContexts = {};
+  global._takeoverContexts[createTaskId] = takeoverContext;
+
+  res.json({ ok: true, phase: 'create_user', task_id: createTaskId, message: 'Takeover initiated, creating temp user on node...' });
+});
 app.post('/api/agent/tasks/:taskId/result', (req, res) => { const taskId = req.params.taskId; const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const leaseToken = String(body.lease_token || '').trim(); const status = String(body.status || '').trim(); if (!['success', 'failed', 'timeout', 'cancelled'].includes(status)) return res.status(400).json({ error: 'invalid status' }); const task = db.prepare(`SELECT * FROM action_tasks WHERE task_id = ?`).get(taskId); if (!task) return res.status(404).json({ error: 'task not found' }); if (task.server_id !== serverId || task.lease_token !== leaseToken) return res.status(403).json({ error: 'invalid lease' }); db.prepare(`UPDATE action_tasks SET status = ?, exit_code = ?, result_code = ?, result_summary = ?, log_excerpt = ?, error_message = ?, finished_at = ?, lease_token = '', lease_expires_at = NULL WHERE task_id = ?`).run(status, body.exit_code == null ? null : Number(body.exit_code), String(body.result_code || ''), String(body.result_summary || ''), String(body.log_excerpt || '').slice(-8000), String(body.error_message || ''), new Date().toISOString(), taskId);
   const linkedIncident = db.prepare(`SELECT * FROM incidents WHERE action_task_id = ? AND status = 'auto_remediating'`).get(taskId);
   if (linkedIncident) {
@@ -524,7 +597,141 @@ app.post('/api/agent/tasks/:taskId/result', (req, res) => { const taskId = req.p
       sendIncidentNotification({ ...linkedIncident, status: 'failed' }, 'failed');
     }
   }
-  res.json({ ok: true }); });
+  res.json({ ok: true });
+
+  // Takeover orchestration: when create_temp_user succeeds, call OpenClaw
+  if (task.action_key === 'create_temp_user' && status === 'success') {
+    (async () => {
+      try {
+        const ctx = (global._takeoverContexts || {})[taskId];
+        if (!ctx) { console.log('takeover: no context for', taskId); return; }
+        delete global._takeoverContexts[taskId];
+
+        // Extract username from task output
+        const logs = String(body.log_excerpt || '');
+        const userMatch = logs.match(/TAKEOVER_USER=(\S+)/);
+        if (!userMatch) { console.log('takeover: could not extract username from logs'); return; }
+        const tmpUser = userMatch[1];
+        console.log('takeover: temp user created:', tmpUser, 'on', ctx.server_ip);
+
+        // Store cleanup info on the incident
+        db.prepare(`UPDATE incidents SET status = 'takeover_active', metadata = ? WHERE id = ?`).run(
+          JSON.stringify({ ...JSON.parse(db.prepare(`SELECT metadata FROM incidents WHERE id = ?`).get(ctx.incident_id)?.metadata || '{}'), takeover_user: tmpUser, takeover_started: new Date().toISOString() }),
+          ctx.incident_id
+        );
+
+        // Build prompt for OpenClaw
+        const prompt = `你是服务器故障修复专家。一个监控系统检测到故障，agent 无法自动修复，现在由你通过 SSH 远程接管修复。
+
+## 故障信息
+- **节点 IP**: ${ctx.server_ip}
+- **主机名**: ${ctx.hostname}
+- **Server ID**: ${ctx.server_id}
+- **故障类型**: ${ctx.fault_type}
+- **故障详情**: ${ctx.title || ctx.details || ''}
+- **当前 issues**: ${JSON.stringify(ctx.issues)}
+- **Agent 版本**: ${ctx.agent_version}
+
+## 诊断报告
+${JSON.stringify(ctx.diagnostics, null, 2)}
+
+## 最近任务执行记录
+${ctx.recent_tasks.map(t => `${t.action_key}: ${t.status} (${t.result_code}) ${t.result_summary}`).join('\n')}
+
+## SSH 连接信息
+- **用户名**: ${tmpUser}
+- **IP**: ${ctx.server_ip}
+- **认证方式**: SSH 密钥（已配置）
+- **sudo 权限**: 已授权 (NOPASSWD)
+- **用户有效期**: 30 分钟后自动删除
+
+## 你的任务
+1. 通过 SSH 连接到节点: \`ssh -o StrictHostKeyChecking=no ${tmpUser}@${ctx.server_ip}\`
+2. 使用 \`sudo\` 执行需要 root 权限的命令
+3. 诊断故障根因
+4. 修复问题
+5. 验证修复结果（检查相关端口、服务状态）
+6. 汇报修复结果
+
+## 约束
+- 不要删除重要数据
+- 不要修改 SSH 配置
+- 修复完成后确认服务正常运行
+- 完成后说明你做了什么、结果如何
+
+## 完成后
+在修复完成后，调用以下接口通知监控系统清理临时用户：
+\`\`\`
+curl -X POST http://127.0.0.1:8080/api/takeover/${ctx.incident_id}/complete \\
+  -H "Content-Type: application/json" \\
+  -d '{"username": "${tmpUser}", "server_id": "${ctx.server_id}", "result": "success 或 failed", "summary": "修复摘要"}'
+\`\`\``;
+
+        // Call OpenClaw webhook
+        const hookPayload = JSON.stringify({
+          message: prompt,
+          name: `takeover-${ctx.server_ip}`,
+          deliver: true,
+          channel: 'whatsapp',
+          to: '+8618611713878',
+          timeoutSeconds: 300,
+        });
+
+        const hookRes = await fetch(OPENCLAW_HOOKS_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENCLAW_HOOKS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: hookPayload,
+        });
+        console.log('takeover: OpenClaw webhook response:', hookRes.status);
+      } catch (err) {
+        console.error('takeover: OpenClaw call failed:', err.message);
+      }
+    })();
+  }
+
+  // Takeover orchestration: when create_temp_user fails, revert incident
+  if (task.action_key === 'create_temp_user' && status !== 'success') {
+    const ctx = (global._takeoverContexts || {})[taskId];
+    if (ctx) {
+      db.prepare(`UPDATE incidents SET status = 'failed', last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(ctx.incident_id);
+      delete global._takeoverContexts[taskId];
+    }
+  }
+});
+
+/* ── Takeover complete callback (called by OpenClaw after repair) ── */
+app.post('/api/takeover/:incidentId/complete', (req, res) => {
+  const incidentId = req.params.incidentId;
+  const body = req.body || {};
+  const username = String(body.username || '').trim();
+  const serverId = String(body.server_id || '').trim();
+  const result = String(body.result || 'unknown');
+  const summary = String(body.summary || '');
+
+  const incident = db.prepare(`SELECT * FROM incidents WHERE id = ?`).get(incidentId);
+  if (!incident) return res.status(404).json({ error: 'incident not found' });
+
+  // Update incident
+  const newStatus = result === 'success' ? 'resolved' : 'failed';
+  db.prepare(`UPDATE incidents SET status = ?, resolved_at = CASE WHEN ? = 'resolved' THEN CURRENT_TIMESTAMP ELSE resolved_at END, details = ?, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(
+    newStatus, newStatus, `[OpenClaw 接管修复] ${summary}`, incidentId
+  );
+
+  // Dispatch delete_temp_user task to clean up
+  if (username && serverId && username.startsWith('oclaw_')) {
+    const deleteTaskId = genTaskId();
+    db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, metadata) VALUES (?, ?, 'delete_temp_user', ?, 'pending', 'takeover-cleanup', 'openclaw', 1, 15, '{}')`).run(
+      deleteTaskId, serverId, JSON.stringify({ username })
+    );
+    console.log('takeover: cleanup task created:', deleteTaskId, 'for user', username);
+  }
+
+  res.json({ ok: true, incident_status: newStatus, message: 'Takeover complete, cleanup dispatched' });
+});
+
 app.post('/api/groups', authMiddleware, (req, res) => { const { name } = req.body || {}; if (!name) return res.status(400).json({ error: 'name required' }); ensureGroup.run(name, 999); res.json({ ok: true }); });
 app.patch('/api/groups/reorder', authMiddleware, (req, res) => { const { ids } = req.body || {}; if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids required' }); const stmt = db.prepare(`UPDATE groups SET sort_order = ? WHERE id = ?`); ids.forEach((id, idx) => stmt.run(idx, id)); res.json({ ok: true }); });
 app.get('/api/groups', authMiddleware, (req, res) => res.json(db.prepare(`SELECT id, name, sort_order, created_at FROM groups ORDER BY sort_order ASC, id ASC`).all()));
