@@ -97,10 +97,12 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [packageUploadOpen, setPackageUploadOpen] = useState(false);
   const [packageRepoOpen, setPackageRepoOpen] = useState(false);
   const [incidentPanelOpen, setIncidentPanelOpen] = useState(false);
+  const [incidentServerFilter, setIncidentServerFilter] = useState('');
   const [packageRepoRefreshKey, setPackageRepoRefreshKey] = useState(0);
   const [rules, setRules] = useState(initialRules);
   const [toast, setToast] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [incidentStats, setIncidentStats] = useState({ open: 0, remediating: 0, failed: 0, resolved: 0 });
 
   useEffect(() => {
     if (!toast) return;
@@ -159,6 +161,22 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       const data = await res.json();
       if (!Array.isArray(data.servers)) return;
       setServers(normalizeIncoming(data.servers));
+    } catch {}
+    try {
+      const incRes = await fetch('/api/proxy/incidents?limit=200', { cache: 'no-store' });
+      if (incRes.ok) {
+        const incidents = await incRes.json();
+        if (Array.isArray(incidents)) {
+          const s = { open: 0, remediating: 0, failed: 0, resolved: 0 };
+          for (const inc of incidents) {
+            if (inc.status === 'open' || inc.status === 'acknowledged') s.open++;
+            else if (inc.status === 'auto_remediating') s.remediating++;
+            else if (inc.status === 'failed') s.failed++;
+            else if (inc.status === 'resolved') s.resolved++;
+          }
+          setIncidentStats(s);
+        }
+      }
     } catch {}
   }
 
@@ -257,6 +275,15 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         <div className="statCard healthy"><span>Healthy</span><strong>{stats.healthy}</strong></div>
         <div className="statCard problem"><span>Problem</span><strong>{stats.problem}</strong></div>
         <div className="statCard offline"><span>Offline</span><strong>{stats.offline}</strong></div>
+        <div className={`statCard ${incidentStats.open > 0 ? 'problem' : 'healthy'}`} style={{ cursor: 'pointer' }} onClick={() => setIncidentPanelOpen(true)}>
+          <span>🚨 Open Incidents</span><strong>{incidentStats.open}</strong>
+        </div>
+        <div className={`statCard ${incidentStats.remediating > 0 ? 'problem' : ''}`} style={{ cursor: 'pointer' }} onClick={() => setIncidentPanelOpen(true)}>
+          <span>🔧 Remediating</span><strong>{incidentStats.remediating}</strong>
+        </div>
+        <div className={`statCard ${incidentStats.failed > 0 ? 'offline' : ''}`} style={{ cursor: 'pointer' }} onClick={() => setIncidentPanelOpen(true)}>
+          <span>❌ Failed</span><strong>{incidentStats.failed}</strong>
+        </div>
       </section>
 
       <section className="toolbar compactToolbar cleanToolbar liveToolbar">
@@ -269,7 +296,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           </div>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setGroupManagerOpen(true)}>分类管理</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setRulesOpen(true)}>监控规则</button>
-          <button className="primaryBtn compactPageBtn incidentBtn" type="button" onClick={() => setIncidentPanelOpen(true)}>🚨 Incidents</button>
+          <button className="primaryBtn compactPageBtn incidentBtn" type="button" onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>🚨 Incidents{incidentStats.open > 0 ? ` (${incidentStats.open})` : ''}</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageRepoOpen(true)}>包仓库</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageUploadOpen(true)}>上传安装包</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={refreshNow}>立即刷新</button>
@@ -381,7 +408,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         </div>
       </section>
 
-      <NodeDrawer server={selectedServer} onClose={() => setSelectedServer(null)} onCopy={copyText} />
+      <NodeDrawer server={selectedServer} onClose={() => setSelectedServer(null)} onCopy={copyText} onViewIncidents={(sid) => { setSelectedServer(null); setIncidentServerFilter(sid); setIncidentPanelOpen(true); }} />
       <ServerModal open={!!editServer} mode="edit" server={editServer} groups={groups} onClose={() => setEditServer(null)} onSaved={() => { setToast({ type: 'success', text: '节点修改已保存' }); location.reload(); }} />
       <ServerModal open={!!deleteServer} mode="delete" server={deleteServer} groups={groups} onClose={() => setDeleteServer(null)} onDeleted={handleDeleted} />
       <GroupManagerModal open={groupManagerOpen} groups={groups} onClose={() => setGroupManagerOpen(false)} />
@@ -404,7 +431,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       <TaskHistoryModal open={!!taskHistoryServer} server={taskHistoryServer} onClose={() => setTaskHistoryServer(null)} />
       <PackageRepoModal open={packageRepoOpen} refreshKey={packageRepoRefreshKey} onClose={() => setPackageRepoOpen(false)} />
       <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => { setPackageRepoRefreshKey((x) => x + 1); setPackageRepoOpen(true); setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` }); }} />
-      <IncidentPanel open={incidentPanelOpen} onClose={() => setIncidentPanelOpen(false)} />
+      <IncidentPanel open={incidentPanelOpen} onClose={() => { setIncidentPanelOpen(false); setIncidentServerFilter(''); }} initialServerFilter={incidentServerFilter} />
     </>
   );
 }

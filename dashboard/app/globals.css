@@ -835,3 +835,4 @@ tr:hover .inlineCopyBtn { opacity: 1; }
 .incidentTaskDetail { padding: 16px 20px; border-top: 1px solid var(--border, #e4e7ec); }
 .incidentBtn { background: #ef4444 !important; color: #fff !important; border-color: #ef4444 !important; }
 .incidentBtn:hover { background: #dc2626 !important; }
+.incidentBatchBar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 20px; border-bottom: 1px solid var(--border, #e4e7ec); background: var(--bg-subtle, #f8fafc); }

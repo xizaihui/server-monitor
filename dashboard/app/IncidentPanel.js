@@ -30,15 +30,22 @@ function statusBadgeClass(status) {
   return '';
 }
 
-export default function IncidentPanel({ open, onClose, onTriggerAction }) {
+export default function IncidentPanel({ open, onClose, onTriggerAction, initialServerFilter }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
-  const [serverFilter, setServerFilter] = useState('');
+  const [serverFilter, setServerFilter] = useState(initialServerFilter || '');
   const [triggerBusy, setTriggerBusy] = useState({});
   const [triggerResult, setTriggerResult] = useState({});
   const [taskDetail, setTaskDetail] = useState(null);
   const [taskDetailLoading, setTaskDetailLoading] = useState(false);
+  const [selectedIncidentIds, setSelectedIncidentIds] = useState([]);
+  const [batchBusy, setBatchBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setServerFilter(initialServerFilter || '');
+  }, [open, initialServerFilter]);
 
   useEffect(() => {
     if (!open) return;
@@ -107,6 +114,48 @@ export default function IncidentPanel({ open, onClose, onTriggerAction }) {
     }
   }
 
+  const actionableItems = items.filter((i) => i.suggested_action && i.status !== 'resolved');
+  const selectedActionable = actionableItems.filter((i) => selectedIncidentIds.includes(i.id));
+
+  function toggleIncident(id) {
+    setSelectedIncidentIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+  function toggleAllActionable() {
+    const ids = actionableItems.map((i) => i.id);
+    const allSelected = ids.every((id) => selectedIncidentIds.includes(id));
+    setSelectedIncidentIds(allSelected ? [] : ids);
+  }
+
+  async function batchTrigger() {
+    if (!selectedActionable.length) return;
+    setBatchBusy(true);
+    const results = [];
+    for (const inc of selectedActionable) {
+      try {
+        const meta = JSON.parse(inc.metadata || '{}');
+        const params = {};
+        if (meta.ip) params.server_ip = meta.ip;
+        const res = await fetch('/api/proxy/incidents/' + inc.id + '/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action_key: inc.suggested_action, params }),
+        });
+        const data = await res.json();
+        results.push({ id: inc.id, ok: res.ok && data.ok, error: data.error });
+      } catch {
+        results.push({ id: inc.id, ok: false, error: '网络错误' });
+      }
+    }
+    setBatchBusy(false);
+    setSelectedIncidentIds([]);
+    const success = results.filter((r) => r.ok).length;
+    setTriggerResult((prev) => ({
+      ...prev,
+      _batch: { ok: success > 0, text: `批量执行完成：成功 ${success}/${results.length}` }
+    }));
+    setTimeout(loadIncidents, 1500);
+  }
+
   if (!open) return null;
 
   return (
@@ -129,6 +178,23 @@ export default function IncidentPanel({ open, onClose, onTriggerAction }) {
           <span className="small">共 {items.length} 条{loading ? ' · 加载中...' : ''}</span>
         </div>
 
+        {actionableItems.length > 0 ? (
+          <div className="incidentBatchBar">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={actionableItems.length > 0 && actionableItems.every((i) => selectedIncidentIds.includes(i.id))} onChange={toggleAllActionable} />
+              <span className="small">全选可操作 ({actionableItems.length})</span>
+            </label>
+            {selectedActionable.length > 0 ? (
+              <button className="primaryBtn compactPageBtn" type="button" disabled={batchBusy} onClick={batchTrigger}>
+                {batchBusy ? '批量执行中...' : `⚡ 批量执行 ${selectedActionable.length} 条`}
+              </button>
+            ) : null}
+            {triggerResult._batch ? (
+              <span className={`small ${triggerResult._batch.ok ? 'okText' : 'badText'}`}>{triggerResult._batch.text}</span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="incidentListWrap">
           {items.length === 0 && !loading ? <div className="small" style={{ padding: 20, textAlign: 'center' }}>暂无 incident 记录</div> : null}
 
@@ -140,6 +206,9 @@ export default function IncidentPanel({ open, onClose, onTriggerAction }) {
               <div key={item.id} className={`incidentCard incidentCard--${item.status}`}>
                 <div className="incidentCardHeader">
                   <div className="incidentCardTitle">
+                    {item.suggested_action && item.status !== 'resolved' ? (
+                      <input type="checkbox" checked={selectedIncidentIds.includes(item.id)} onChange={() => toggleIncident(item.id)} />
+                    ) : null}
                     <span className={`badge ${SEVERITY_BADGE[item.severity] || ''}`}>{item.severity}</span>
                     <span className={`badge ${statusBadgeClass(item.status)}`}>{item.status}</span>
                     <strong>{item.title || item.fault_type}</strong>
@@ -163,7 +232,7 @@ export default function IncidentPanel({ open, onClose, onTriggerAction }) {
                         disabled={busy}
                         onClick={() => handleTriggerAction(item)}
                       >
-                        {busy ? '执行中...' : `⚡ 一键 ${item.suggested_action}`}
+                        {busy ? '执行中...' : item.status === 'failed' ? `🔄 重试 ${item.suggested_action}` : `⚡ 一键 ${item.suggested_action}`}
                       </button>
                     ) : null}
 
