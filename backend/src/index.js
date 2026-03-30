@@ -176,11 +176,16 @@ function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {})
     if (existing) {
       db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), existing.id);
     } else {
-      const inserted = db.prepare(`INSERT OR IGNORE INTO incidents(incident_key, dedupe_key, server_id, fault_type, severity, status, title, details, suggested_action, metadata) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`).run(incidentKey, dedupeKey, serverId, faultType, faultSeverity(faultType), faultTitle(serverId, faultType), String(issue), suggestAction(faultType), JSON.stringify(metadata || {}));
-      if (!inserted.changes) {
-        const current = db.prepare(`SELECT id FROM incidents WHERE dedupe_key = ? ORDER BY id DESC LIMIT 1`).get(dedupeKey);
-        if (current) {
-          db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), current.id);
+      const resolvedExisting = db.prepare(`SELECT id FROM incidents WHERE dedupe_key = ? AND status = 'resolved' ORDER BY id DESC LIMIT 1`).get(dedupeKey);
+      if (resolvedExisting) {
+        db.prepare(`UPDATE incidents SET status = 'open', resolved_at = NULL, last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, action_task_id = '', metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), resolvedExisting.id);
+      } else {
+        const inserted = db.prepare(`INSERT OR IGNORE INTO incidents(incident_key, dedupe_key, server_id, fault_type, severity, status, title, details, suggested_action, metadata) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`).run(incidentKey, dedupeKey, serverId, faultType, faultSeverity(faultType), faultTitle(serverId, faultType), String(issue), suggestAction(faultType), JSON.stringify(metadata || {}));
+        if (!inserted.changes) {
+          const current = db.prepare(`SELECT id FROM incidents WHERE dedupe_key = ? ORDER BY id DESC LIMIT 1`).get(dedupeKey);
+          if (current) {
+            db.prepare(`UPDATE incidents SET status = 'open', resolved_at = NULL, last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, action_task_id = '', metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), current.id);
+          }
         }
       }
     }
