@@ -453,18 +453,27 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
         logf("Backed up current binary to %s", bakPath)
     }
 
-    // Install new binary
-    data, err := os.ReadFile(tmpPath)
-    if err != nil {
-        logf("ERROR: read temp binary failed: %v", err)
-        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "io_error", ResultSummary: "读取临时文件失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
+    // CRITICAL: Cannot write to a running binary on Linux (ETXTBSY).
+    // Must delete the old file first, then rename the new one in.
+    // The running process keeps its fd to the old (deleted) inode.
+    if err := os.Remove(binPath); err != nil && !os.IsNotExist(err) {
+        logf("WARNING: could not remove old binary: %v (trying rename anyway)", err)
     }
-    if err := os.WriteFile(binPath, data, 0755); err != nil {
-        logf("ERROR: install binary failed: %v", err)
-        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
+    if err := os.Rename(tmpPath, binPath); err != nil {
+        // Fallback: copy
+        data, readErr := os.ReadFile(tmpPath)
+        if readErr != nil {
+            logf("ERROR: read temp binary failed: %v", readErr)
+            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: readErr.Error()}
+        }
+        if writeErr := os.WriteFile(binPath, data, 0755); writeErr != nil {
+            logf("ERROR: install binary failed: %v", writeErr)
+            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: writeErr.Error()}
+        }
     }
+    os.Chmod(binPath, 0755)
     os.Remove(tmpPath)
-    logf("Installed new binary to %s", binPath)
+    logf("Installed new binary to %s (rm+rename method)", binPath)
 
     // Schedule self-restart AFTER this function returns and result is reported.
     // The main loop will report this result, then we exit so systemd/nohup can restart us.

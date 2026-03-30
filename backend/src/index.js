@@ -621,7 +621,11 @@ app.post('/api/agent/tasks/:taskId/result', (req, res) => { const taskId = req.p
         );
 
         // Build prompt for OpenClaw
-        const prompt = `你是服务器故障修复专家。一个监控系统检测到故障，agent 无法自动修复，现在由你通过 SSH 远程接管修复。
+        // Load ops knowledge base
+        let knowledgeBase = '';
+        try { knowledgeBase = fs.readFileSync(path.join(__dirname, '..', 'ops-knowledge-base.md'), 'utf-8'); } catch (e) { console.log('takeover: knowledge base not found'); }
+
+        const prompt = `你是服务器故障修复专家。一个监控系统检测到故障，agent 的脚本修复失败，现在由你通过 SSH 远程接管修复。
 
 ## 故障信息
 - **节点 IP**: ${ctx.server_ip}
@@ -635,7 +639,7 @@ app.post('/api/agent/tasks/:taskId/result', (req, res) => { const taskId = req.p
 ## 诊断报告
 ${JSON.stringify(ctx.diagnostics, null, 2)}
 
-## 最近任务执行记录
+## 最近任务执行记录（这些是之前尝试自动修复的记录，已失败）
 ${ctx.recent_tasks.map(t => `${t.action_key}: ${t.status} (${t.result_code}) ${t.result_summary}`).join('\n')}
 
 ## SSH 连接信息
@@ -645,24 +649,28 @@ ${ctx.recent_tasks.map(t => `${t.action_key}: ${t.status} (${t.result_code}) ${t
 - **sudo 权限**: 已授权 (NOPASSWD)
 - **用户有效期**: 30 分钟后自动删除
 
+## 运维知识库
+${knowledgeBase}
+
 ## 你的任务
 1. 通过 SSH 连接到节点: \`ssh -o StrictHostKeyChecking=no ${tmpUser}@${ctx.server_ip}\`
-2. 使用 \`sudo\` 执行需要 root 权限的命令
-3. 诊断故障根因
-4. 修复问题
-5. 验证修复结果（检查相关端口、服务状态）
-6. 汇报修复结果
+2. 使用 \`sudo\` 执行需要 root 权限的命令（如 \`sudo systemctl restart xagent\`）
+3. 按照上面知识库中对应故障类型的诊断步骤排查
+4. 按修复方案由简到复杂逐步尝试
+5. 每一步都验证结果
+6. 修复完成后验证端口恢复: \`sudo ss -tlnp | grep :<端口>\`
 
 ## 约束
-- 不要删除重要数据
+- 不要删除重要数据和配置文件
 - 不要修改 SSH 配置
+- 修改配置前先备份: \`sudo cp file file.bak\`
+- 不要改 xagent.yaml 中的 InstanceId（每个节点唯一）
 - 修复完成后确认服务正常运行
-- 完成后说明你做了什么、结果如何
 
 ## 完成后
 在修复完成后，调用以下接口通知监控系统清理临时用户：
 \`\`\`
-curl -X POST http://127.0.0.1:8080/api/takeover/${ctx.incident_id}/complete \\
+curl -X POST http://43.165.172.3:8080/api/takeover/${ctx.incident_id}/complete \\
   -H "Content-Type: application/json" \\
   -d '{"username": "${tmpUser}", "server_id": "${ctx.server_id}", "result": "success 或 failed", "summary": "修复摘要"}'
 \`\`\``;
