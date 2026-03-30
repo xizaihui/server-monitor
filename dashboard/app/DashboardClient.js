@@ -486,10 +486,10 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
                   <td>
-                    <div className="statusStack compactStatusStack">
+                    <button type="button" className="statusStack compactStatusStack statusClickable" onClick={() => setSelectedServer(s)}>
                       <span className={`statusDot ${s.status}`}></span>
                       <span className={`badge ${s.status} compactBadge`}>{s.status === 'healthy' ? 'Healthy' : s.status === 'problem' ? 'Problem' : 'Offline'}</span>
-                    </div>
+                    </button>
                   </td>
                   <td><span className={`badge ${sb.tone}`}>{sb.text}</span></td>
                   <td><MetricBar value={s.cpu_usage} alert={hasIssue(s, 'CPU')} offline={s.status === 'offline'} /></td>

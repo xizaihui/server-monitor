@@ -38,6 +38,23 @@ type Payload struct {
     DiskTotal    uint64            `json:"disk_total"`
     Ports        map[string]bool   `json:"ports"`
     Metadata     map[string]string `json:"metadata"`
+    Diagnostics  *Diagnostics      `json:"diagnostics,omitempty"`
+}
+
+type DiagEntry struct {
+    Name  string  `json:"name"`
+    Value string  `json:"value"`
+    Size  string  `json:"size,omitempty"`
+    PID   string  `json:"pid,omitempty"`
+    Usage float64 `json:"usage"`
+}
+
+type Diagnostics struct {
+    DiskTop  []DiagEntry `json:"disk_top,omitempty"`
+    CPUTop   []DiagEntry `json:"cpu_top,omitempty"`
+    MemTop   []DiagEntry `json:"mem_top,omitempty"`
+    DiskMounts []DiagEntry `json:"disk_mounts,omitempty"`
+    CollectedAt string  `json:"collected_at"`
 }
 
 type ActionTask struct {
@@ -402,7 +419,189 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     diskUsage := percent(diskUsed, diskTotal)
     ports := map[string]bool{}
     for _, p := range []string{"443", "6379", "8888", "8789"} { ports[p] = checkPort("127.0.0.1:" + p) }
-    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.6.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion}}, nil
+
+    // Collect diagnostics when thresholds exceeded
+    var diag *Diagnostics
+    needDiag := cpuUsage > 80 || memUsage > 85 || diskUsage > 55
+    if needDiag {
+        diag = collectDiagnostics(cpuUsage > 80, memUsage > 85, diskUsage > 55)
+    }
+
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.7.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion}, Diagnostics: diag}, nil
+}
+
+func collectDiagnostics(cpuAlert, memAlert, diskAlert bool) *Diagnostics {
+    diag := &Diagnostics{CollectedAt: time.Now().Format(time.RFC3339)}
+
+    if diskAlert {
+        diag.DiskTop = collectDiskTop()
+        diag.DiskMounts = collectDiskMounts()
+    }
+    if cpuAlert {
+        diag.CPUTop = collectProcessTop("cpu")
+    }
+    if memAlert {
+        diag.MemTop = collectProcessTop("mem")
+    }
+
+    return diag
+}
+
+func collectDiskTop() []DiagEntry {
+    // Find top 5 largest directories under / (excluding virtual filesystems)
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    cmd := osExec.CommandContext(ctx, "du", "-x", "--max-depth=2", "-B1", "/")
+    var out bytes.Buffer
+    cmd.Stdout = &out
+    cmd.Stderr = nil
+    _ = cmd.Run()
+
+    type entry struct {
+        size uint64
+        path string
+    }
+    var entries []entry
+    scanner := bufio.NewScanner(&out)
+    for scanner.Scan() {
+        line := scanner.Text()
+        fields := strings.Fields(line)
+        if len(fields) < 2 { continue }
+        size, err := strconv.ParseUint(fields[0], 10, 64)
+        if err != nil { continue }
+        path := fields[1]
+        if path == "/" { continue }
+        // Skip virtual filesystems
+        if strings.HasPrefix(path, "/proc") || strings.HasPrefix(path, "/sys") || strings.HasPrefix(path, "/dev") || strings.HasPrefix(path, "/run") { continue }
+        entries = append(entries, entry{size: size, path: path})
+    }
+
+    // Sort descending
+    for i := 0; i < len(entries); i++ {
+        for j := i + 1; j < len(entries); j++ {
+            if entries[j].size > entries[i].size {
+                entries[i], entries[j] = entries[j], entries[i]
+            }
+        }
+    }
+
+    limit := 5
+    if len(entries) < limit { limit = len(entries) }
+    result := make([]DiagEntry, 0, limit)
+    for _, e := range entries[:limit] {
+        result = append(result, DiagEntry{
+            Name:  e.path,
+            Size:  formatBytes(e.size),
+            Usage: float64(e.size),
+        })
+    }
+    return result
+}
+
+func collectDiskMounts() []DiagEntry {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    cmd := osExec.CommandContext(ctx, "df", "-h", "--output=target,size,used,pcent")
+    var out bytes.Buffer
+    cmd.Stdout = &out
+    cmd.Stderr = nil
+    _ = cmd.Run()
+
+    var entries []DiagEntry
+    scanner := bufio.NewScanner(&out)
+    first := true
+    for scanner.Scan() {
+        if first { first = false; continue } // skip header
+        line := scanner.Text()
+        fields := strings.Fields(line)
+        if len(fields) < 4 { continue }
+        mount := fields[0]
+        if strings.HasPrefix(mount, "/dev") && !strings.HasPrefix(mount, "/dev/") { continue }
+        pctStr := strings.TrimSuffix(fields[3], "%")
+        pct, _ := strconv.ParseFloat(pctStr, 64)
+        entries = append(entries, DiagEntry{
+            Name:  mount,
+            Value: fmt.Sprintf("总量 %s / 已用 %s / %s%%", fields[1], fields[2], pctStr),
+            Usage: pct,
+        })
+    }
+    return entries
+}
+
+func collectProcessTop(mode string) []DiagEntry {
+    // Use ps to get top 5 processes by CPU or memory
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    var sortField string
+    if mode == "cpu" {
+        sortField = "-pcpu"
+    } else {
+        sortField = "-rss"
+    }
+    cmd := osExec.CommandContext(ctx, "ps", "aux", "--sort="+sortField)
+    var out bytes.Buffer
+    cmd.Stdout = &out
+    cmd.Stderr = nil
+    _ = cmd.Run()
+
+    var entries []DiagEntry
+    scanner := bufio.NewScanner(&out)
+    first := true
+    count := 0
+    for scanner.Scan() {
+        if first { first = false; continue } // skip header
+        if count >= 5 { break }
+        line := scanner.Text()
+        fields := strings.Fields(line)
+        if len(fields) < 11 { continue }
+        pid := fields[1]
+        cpuPct := fields[2]
+        memPct := fields[3]
+        rss := fields[5]
+        cmdName := strings.Join(fields[10:], " ")
+        // Truncate long command
+        if len(cmdName) > 80 { cmdName = cmdName[:80] + "..." }
+
+        var usageVal float64
+        if mode == "cpu" {
+            usageVal, _ = strconv.ParseFloat(cpuPct, 64)
+            entries = append(entries, DiagEntry{
+                Name:  cmdName,
+                PID:   pid,
+                Value: fmt.Sprintf("CPU: %s%%  MEM: %s%%  RSS: %sKB", cpuPct, memPct, rss),
+                Usage: usageVal,
+            })
+        } else {
+            usageVal, _ = strconv.ParseFloat(memPct, 64)
+            rssKB, _ := strconv.ParseUint(rss, 10, 64)
+            entries = append(entries, DiagEntry{
+                Name:  cmdName,
+                PID:   pid,
+                Value: fmt.Sprintf("MEM: %s%%  RSS: %s  CPU: %s%%", memPct, formatBytes(rssKB*1024), cpuPct),
+                Usage: usageVal,
+            })
+        }
+        count++
+    }
+    return entries
+}
+
+func formatBytes(b uint64) string {
+    const (
+        KB = 1024
+        MB = 1024 * KB
+        GB = 1024 * MB
+    )
+    switch {
+    case b >= GB:
+        return fmt.Sprintf("%.1fGB", float64(b)/float64(GB))
+    case b >= MB:
+        return fmt.Sprintf("%.1fMB", float64(b)/float64(MB))
+    case b >= KB:
+        return fmt.Sprintf("%.0fKB", float64(b)/float64(KB))
+    default:
+        return fmt.Sprintf("%dB", b)
+    }
 }
 
 type cpuStat struct { idle, total uint64 }

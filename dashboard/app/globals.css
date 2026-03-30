@@ -595,6 +595,9 @@ tr.offlineRow td:last-child { background: #f8f8f8; }
 .statusDot.problem { background: var(--color-warning); animation: breathe-warning 2s ease-in-out infinite; box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.5); }
 .statusDot.offline { background: var(--color-danger); animation: breathe-danger 3s ease-in-out infinite; }
 
+.statusClickable { cursor: pointer; border: none; background: none; padding: 0; }
+.statusClickable:hover .badge { filter: brightness(0.9); }
+
 @keyframes breathe-warning {
   0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4); }
   50% { box-shadow: 0 0 0 6px rgba(217, 119, 6, 0); }
@@ -902,6 +905,19 @@ tr:hover .inlineCopyBtn { opacity: 1; }
 .drawerSection { margin-top: 16px; }
 .drawerSectionTitle { font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--color-text); }
 .drawerList { display: grid; gap: 6px; }
+
+/* Diagnostics report */
+.diagTitle { display: flex; align-items: center; gap: 8px; color: var(--color-danger); }
+.diagTime { font-size: 11px; font-weight: 400; color: var(--color-muted); }
+.diagBlock { margin-top: 10px; }
+.diagLabel { font-size: 12px; font-weight: 500; color: var(--color-text); margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--color-border-subtle); }
+.diagList { display: flex; flex-direction: column; gap: 3px; }
+.diagItem { display: flex; align-items: flex-start; gap: 6px; padding: 4px 6px; background: var(--color-bg); border-radius: var(--radius-sm); font-size: 12px; line-height: 1.5; }
+.diagRank { flex-shrink: 0; width: 20px; font-weight: 600; color: var(--color-muted); }
+.diagPath { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 11px; word-break: break-all; flex: 1; min-width: 0; }
+.diagSize { flex-shrink: 0; font-weight: 500; color: var(--color-text); white-space: nowrap; }
+.diagProcess { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.diagMeta { font-size: 11px; color: var(--color-muted); }
 
 .drawerRow {
   display: flex;

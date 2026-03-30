@@ -23,7 +23,77 @@ export default function NodeDrawer({ server, onClose, onCopy, onViewIncidents })
         <div className="drawerSection"><div className="drawerSectionTitle">端口状态</div><div className="drawerList">{ports.map(([label, ok]) => <div className="drawerRow" key={label}><span>{label}</span><strong className={server.status === 'offline' ? '' : ok ? 'okText' : 'badText'}>{server.status === 'offline' ? '-' : ok ? 'UP' : 'DOWN'}</strong></div>)}</div></div>
         {onViewIncidents ? (
           <div className="drawerSection">
-            <button className="primaryBtn" type="button" style={{ width: '100%' }} onClick={() => onViewIncidents(server.server_id)}>🚨 查看该节点 Incidents</button>
+            <button className="primaryBtn" type="button" style={{ width: '100%' }} onClick={() => onViewIncidents(server.server_id)}>查看该节点 Incidents</button>
+          </div>
+        ) : null}
+
+        {/* Diagnostics report */}
+        {server.diagnostics && Object.keys(server.diagnostics).length > 0 && server.diagnostics.collected_at ? (
+          <div className="drawerSection">
+            <div className="drawerSectionTitle diagTitle">故障诊断报告 <span className="diagTime">{formatShanghai(server.diagnostics.collected_at)}</span></div>
+
+            {server.diagnostics.disk_top?.length > 0 && (
+              <div className="diagBlock">
+                <div className="diagLabel">磁盘占用 TOP 5</div>
+                <div className="diagList">
+                  {server.diagnostics.disk_top.map((d, i) => (
+                    <div key={i} className="diagItem">
+                      <span className="diagRank">#{i + 1}</span>
+                      <span className="diagPath" title={d.name}>{d.name}</span>
+                      <span className="diagSize">{d.size}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {server.diagnostics.disk_mounts?.length > 0 && (
+              <div className="diagBlock">
+                <div className="diagLabel">挂载点使用率</div>
+                <div className="diagList">
+                  {server.diagnostics.disk_mounts.map((d, i) => (
+                    <div key={i} className="diagItem">
+                      <span className="diagPath" title={d.name}>{d.name}</span>
+                      <span className="diagSize">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {server.diagnostics.cpu_top?.length > 0 && (
+              <div className="diagBlock">
+                <div className="diagLabel">CPU 占用 TOP 5 进程</div>
+                <div className="diagList">
+                  {server.diagnostics.cpu_top.map((d, i) => (
+                    <div key={i} className="diagItem">
+                      <span className="diagRank">#{i + 1}</span>
+                      <div className="diagProcess">
+                        <span className="diagPath" title={d.name}>{d.name}</span>
+                        <span className="diagMeta">PID: {d.pid} | {d.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {server.diagnostics.mem_top?.length > 0 && (
+              <div className="diagBlock">
+                <div className="diagLabel">内存占用 TOP 5 进程</div>
+                <div className="diagList">
+                  {server.diagnostics.mem_top.map((d, i) => (
+                    <div key={i} className="diagItem">
+                      <span className="diagRank">#{i + 1}</span>
+                      <div className="diagProcess">
+                        <span className="diagPath" title={d.name}>{d.name}</span>
+                        <span className="diagMeta">PID: {d.pid} | {d.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
       </aside>
