@@ -129,7 +129,7 @@ const DEFAULT_ACTION_DEFINITIONS = [
     action_key: 'create_temp_user', name: '创建临时用户', display_name: '创建临时用户', category: 'takeover', description: '为 OpenClaw 接管创建临时 sudo 用户',
     script_path: '/opt/core-service/scripts/create_temp_user.sh',
     param_schema: JSON.stringify({ required: ['public_key'], properties: { public_key: { type: 'string' } } }),
-    role_scope: JSON.stringify([]), risk_level: 'critical', timeout_seconds: 30, executor_type: 'agent', cooldown_seconds: 60, max_retries: 0, auto_enabled: 0, requires_approval: 0, batch_enabled: 0,
+    role_scope: JSON.stringify([]), risk_level: 'critical', timeout_seconds: 60, executor_type: 'agent', cooldown_seconds: 60, max_retries: 0, auto_enabled: 0, requires_approval: 0, batch_enabled: 0,
     trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({}), fallback_action_key: '', priority: 1, metadata: JSON.stringify({})
   },
   {
@@ -229,9 +229,14 @@ function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {})
     activeFaults.add(faultType);
     const dedupeKey = `${serverId}:${faultType}`;
     const incidentKey = crypto.createHash('sha1').update(dedupeKey).digest('hex').slice(0, 24);
-    const existing = db.prepare(`SELECT id, status FROM incidents WHERE dedupe_key = ? AND status IN ('open','acknowledged','auto_remediating','failed') ORDER BY id DESC LIMIT 1`).get(dedupeKey);
+    const existing = db.prepare(`SELECT id, status FROM incidents WHERE dedupe_key = ? AND status IN ('open','acknowledged','auto_remediating','failed','takeover_pending','takeover_active') ORDER BY id DESC LIMIT 1`).get(dedupeKey);
     if (existing) {
-      db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), existing.id);
+      // Don't overwrite metadata for takeover-related statuses (they contain takeover_user etc)
+      if (existing.status === 'takeover_pending' || existing.status === 'takeover_active') {
+        db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(existing.id);
+      } else {
+        db.prepare(`UPDATE incidents SET last_seen_at = CURRENT_TIMESTAMP, details = ?, suggested_action = ?, metadata = ? WHERE id = ?`).run(String(issue), suggestAction(faultType), JSON.stringify(metadata || {}), existing.id);
+      }
     } else {
       const resolvedExisting = db.prepare(`SELECT id FROM incidents WHERE dedupe_key = ? AND status = 'resolved' ORDER BY id DESC LIMIT 1`).get(dedupeKey);
       if (resolvedExisting) {
@@ -253,7 +258,7 @@ function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {})
       }
     }
   }
-  const openRows = db.prepare(`SELECT id, fault_type FROM incidents WHERE server_id = ? AND status IN ('open','acknowledged','auto_remediating','failed')`).all(serverId);
+  const openRows = db.prepare(`SELECT id, fault_type, status FROM incidents WHERE server_id = ? AND status IN ('open','acknowledged','auto_remediating','failed')`).all(serverId);
   for (const row of openRows) {
     if (!activeFaults.has(row.fault_type) && !(row.fault_type === 'server_offline' && serverStatus === 'offline')) {
       db.prepare(`UPDATE incidents SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(row.id);
@@ -557,7 +562,7 @@ app.post('/api/incidents/:id/takeover', authMiddleware, async (req, res) => {
 
   // Step 1: Create temp user task
   const createTaskId = genTaskId();
-  db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, parent_incident_id, metadata) VALUES (?, ?, 'create_temp_user', ?, 'pending', 'takeover', 'openclaw-takeover', 1, 30, ?, ?)`).run(
+  db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, parent_incident_id, metadata) VALUES (?, ?, 'create_temp_user', ?, 'pending', 'takeover', 'openclaw-takeover', 1, 60, ?, ?)`).run(
     createTaskId, serverId, JSON.stringify({ public_key: OPENCLAW_PUBLIC_KEY }), String(incident.incident_key || ''),
     JSON.stringify({ takeover_incident_id: incidentId, phase: 'create_user' })
   );
@@ -581,9 +586,8 @@ app.post('/api/incidents/:id/takeover', authMiddleware, async (req, res) => {
     agent_version: serverMeta.agent_version || '',
     create_task_id: createTaskId,
   };
-  // Store in a simple in-memory map (keyed by create_task_id)
-  if (!global._takeoverContexts) global._takeoverContexts = {};
-  global._takeoverContexts[createTaskId] = takeoverContext;
+  // Store takeover context in the task's metadata (survives backend restart)
+  db.prepare(`UPDATE action_tasks SET metadata = ? WHERE task_id = ?`).run(JSON.stringify({ takeover_incident_id: incidentId, phase: 'create_user', takeover_context: takeoverContext }), createTaskId);
 
   res.json({ ok: true, phase: 'create_user', task_id: createTaskId, message: 'Takeover initiated, creating temp user on node...' });
 });
@@ -601,14 +605,18 @@ app.post('/api/agent/tasks/:taskId/result', (req, res) => { const taskId = req.p
 
   // Takeover orchestration: when create_temp_user succeeds, call OpenClaw
   if (task.action_key === 'create_temp_user' && status === 'success') {
+    console.log('takeover: create_temp_user succeeded for task', taskId);
     (async () => {
       try {
-        const ctx = (global._takeoverContexts || {})[taskId];
-        if (!ctx) { console.log('takeover: no context for', taskId); return; }
-        delete global._takeoverContexts[taskId];
+        // Read takeover context from task metadata (survives backend restart)
+        const taskRow = db.prepare(`SELECT metadata FROM action_tasks WHERE task_id = ?`).get(taskId);
+        const taskMeta = JSON.parse(taskRow?.metadata || '{}');
+        const ctx = taskMeta.takeover_context;
+        if (!ctx) { console.log('takeover: no context in task metadata for', taskId, 'meta:', taskRow?.metadata?.slice(0,100)); return; }
 
         // Extract username from task output
         const logs = String(body.log_excerpt || '');
+        console.log('takeover: log_excerpt:', logs.slice(0, 200));
         const userMatch = logs.match(/TAKEOVER_USER=(\S+)/);
         if (!userMatch) { console.log('takeover: could not extract username from logs'); return; }
         const tmpUser = userMatch[1];
@@ -623,7 +631,7 @@ app.post('/api/agent/tasks/:taskId/result', (req, res) => { const taskId = req.p
         // Build prompt for OpenClaw
         // Load ops knowledge base
         let knowledgeBase = '';
-        try { knowledgeBase = fs.readFileSync(path.join(__dirname, '..', 'ops-knowledge-base.md'), 'utf-8'); } catch (e) { console.log('takeover: knowledge base not found'); }
+        try { knowledgeBase = fs.readFileSync('/opt/server-monitor/ops-knowledge-base.md', 'utf-8'); } catch (e) { console.log('takeover: knowledge base not found at /opt/server-monitor/ops-knowledge-base.md'); }
 
         const prompt = `你是服务器故障修复专家。一个监控系统检测到故障，agent 的脚本修复失败，现在由你通过 SSH 远程接管修复。
 
@@ -702,10 +710,9 @@ curl -X POST http://43.165.172.3:8080/api/takeover/${ctx.incident_id}/complete \
 
   // Takeover orchestration: when create_temp_user fails, revert incident
   if (task.action_key === 'create_temp_user' && status !== 'success') {
-    const ctx = (global._takeoverContexts || {})[taskId];
-    if (ctx) {
-      db.prepare(`UPDATE incidents SET status = 'failed', last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(ctx.incident_id);
-      delete global._takeoverContexts[taskId];
+    const taskMeta = JSON.parse(task.metadata || '{}');
+    if (taskMeta.takeover_incident_id) {
+      db.prepare(`UPDATE incidents SET status = 'failed', last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskMeta.takeover_incident_id);
     }
   }
 });
