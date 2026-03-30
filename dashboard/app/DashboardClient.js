@@ -156,10 +156,26 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [bulkBusy, setBulkBusy] = useState(false);
   const [incidentStats, setIncidentStats] = useState({ open: 0, remediating: 0, failed: 0, resolved: 0 });
   const [alertSoundEnabled, setAlertSoundEnabled] = useState(true);
+  const [alertAcknowledged, setAlertAcknowledged] = useState(false);
+  const [hasActiveProblems, setHasActiveProblems] = useState(false);
   const alertSoundRef = useRef(true);
+  const alertAckRef = useRef(false);
   const prevProblemIdsRef = useRef(null);
+  const alertIntervalRef = useRef(null);
+  const hasProblemRef = useRef(false);
 
   useEffect(() => { alertSoundRef.current = alertSoundEnabled; }, [alertSoundEnabled]);
+  useEffect(() => { alertAckRef.current = alertAcknowledged; }, [alertAcknowledged]);
+
+  // Continuous alarm loop: plays every 8s while problems exist and not acknowledged
+  useEffect(() => {
+    alertIntervalRef.current = setInterval(() => {
+      if (hasProblemRef.current && alertSoundRef.current && !alertAckRef.current) {
+        playAlertSound();
+      }
+    }, 8000);
+    return () => clearInterval(alertIntervalRef.current);
+  }, []);
 
   // Unlock AudioContext on first user interaction (Chrome autoplay policy)
   useEffect(() => {
@@ -231,12 +247,25 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       const normalized = normalizeIncoming(data.servers);
       setServers(normalized);
 
-      // Detect NEW problem nodes and trigger alert sound
+      // Track problem nodes for continuous alarm
       const currentProblemIds = new Set(normalized.filter(isProblem).map(s => s.server_id));
-      if (prevProblemIdsRef.current !== null && alertSoundRef.current) {
+      hasProblemRef.current = currentProblemIds.size > 0;
+      setHasActiveProblems(currentProblemIds.size > 0);
+
+      if (prevProblemIdsRef.current !== null) {
+        // If NEW problem nodes appeared, reset acknowledge so alarm resumes
         const hasNewProblem = [...currentProblemIds].some(id => !prevProblemIdsRef.current.has(id));
-        if (hasNewProblem) playAlertSound();
+        if (hasNewProblem) {
+          setAlertAcknowledged(false);
+          // Play immediately on new problem detection
+          if (alertSoundRef.current) playAlertSound();
+        }
+      } else if (currentProblemIds.size > 0) {
+        // First load with existing problems — start alarm immediately
+        if (alertSoundRef.current) playAlertSound();
       }
+      // If all problems resolved, auto-reset acknowledge for next time
+      if (currentProblemIds.size === 0) setAlertAcknowledged(false);
       prevProblemIdsRef.current = currentProblemIds;
     } catch {}
     try {
@@ -392,15 +421,25 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           <button
             type="button"
             className={`alertSoundToggle ${alertSoundEnabled ? 'on' : 'off'}`}
-            title={alertSoundEnabled ? '报警声音已开启' : '报警声音已关闭'}
+            title={alertSoundEnabled ? '报警声音已开启，点击关闭' : '报警声音已关闭，点击开启'}
             onClick={() => {
               const next = !alertSoundEnabled;
               setAlertSoundEnabled(next);
               if (next) { unlockAudio(); setTimeout(playAlertSound, 100); }
+              if (!next) setAlertAcknowledged(true);
             }}
           >
             {alertSoundEnabled ? '🔔' : '🔕'}
           </button>
+          {alertSoundEnabled && hasActiveProblems && !alertAcknowledged && (
+            <button
+              type="button"
+              className="ackBtn"
+              onClick={() => setAlertAcknowledged(true)}
+            >
+              静音
+            </button>
+          )}
           <span>每页</span>
           <select className="select compactSelect" value={pageSize} onChange={(e) => onChangePageSize(e.target.value)}>
             {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
