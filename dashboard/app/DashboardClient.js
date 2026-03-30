@@ -215,6 +215,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         credentials: 'include',
         headers: { 'Cache-Control': 'no-cache' }
       });
+      if (res.status === 401) { window.location.href = '/login'; return; }
       if (!res.ok) return;
       const data = await res.json();
       if (!Array.isArray(data.servers)) return;
