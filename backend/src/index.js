@@ -117,6 +117,13 @@ const DEFAULT_ACTION_DEFINITIONS = [
     param_schema: JSON.stringify({ required: ['ops_scripts_url'], properties: { ops_scripts_url: { type: 'string', format: 'url' } } }),
     role_scope: JSON.stringify(['xagent', 'xbridge', 'redis']), risk_level: 'safe', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
     trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/opt/core-service/scripts/restart_xagent.sh', '/opt/core-service/scripts/update_xcore.sh'] }), fallback_action_key: '', priority: 5, metadata: JSON.stringify({ ops_scripts_url: `${DOWNLOAD_BASE_URL}/packages/ops/stable/current/ops-scripts.zip` })
+  },
+  {
+    action_key: 'upgrade_agent', name: '升级 Agent', display_name: '升级 Agent', category: 'maintenance', description: '下载最新 agent 二进制并重启',
+    script_path: '/opt/core-service/scripts/upgrade_agent.sh',
+    param_schema: JSON.stringify({ required: ['download_base'], properties: { download_base: { type: 'string', format: 'url' } } }),
+    role_scope: JSON.stringify(['xagent', 'xbridge', 'redis']), risk_level: 'guarded', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 300, max_retries: 0, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({}), fallback_action_key: '', priority: 10, metadata: JSON.stringify({ download_base: `${DOWNLOAD_BASE_URL}` })
   }
 ];
 

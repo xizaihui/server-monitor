@@ -45,6 +45,7 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
       xagent_download_url: actionKey === 'install_ixvpn' ? (prev.xagent_download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xagent/stable/current/xagent-server.zip') : prev.xagent_download_url,
       download_url: actionKey === 'install_xnftables' ? (prev.download_url || meta.download_url || 'http://43.165.172.3/downloads/packages/xbridge/stable/current/xbridge-server.zip') : prev.download_url,
       ops_scripts_url: actionKey === 'init_ops_scripts' ? (prev.ops_scripts_url || meta.ops_scripts_url || 'http://43.165.172.3/downloads/packages/ops/stable/current/ops-scripts.zip') : prev.ops_scripts_url,
+      download_base: actionKey === 'upgrade_agent' ? (prev.download_base || meta.download_base || 'http://43.165.172.3/downloads') : prev.download_base,
     }));
   }, [open, singleServer, targetServers, currentDef, actionKey]);
 
@@ -72,6 +73,11 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
         { key: 'ops_scripts_url', label: '脚本包地址', placeholder: 'http://43.165.172.3/downloads/packages/ops/stable/current/ops-scripts.zip' },
       ];
     }
+    if (actionKey === 'upgrade_agent') {
+      return [
+        { key: 'download_base', label: '下载服务器地址', placeholder: 'http://43.165.172.3/downloads' },
+      ];
+    }
     return [];
   }, [actionKey, isBulk]);
 
@@ -93,6 +99,9 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
     }
     if (actionKey === 'init_ops_scripts') {
       return { ops_scripts_url: form.ops_scripts_url };
+    }
+    if (actionKey === 'upgrade_agent') {
+      return { download_base: form.download_base };
     }
     return {};
   }

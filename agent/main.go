@@ -133,6 +133,11 @@ var actionRegistry = map[string]ActionDef{
         TimeoutSec: 600,
         ParamOrder: []string{"server_id", "download_url"},
     },
+    "upgrade_agent": {
+        ScriptPath: "/opt/core-service/scripts/upgrade_agent.sh",
+        TimeoutSec: 120,
+        ParamOrder: []string{"download_base"},
+    },
 }
 
 func main() {
