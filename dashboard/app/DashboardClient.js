@@ -13,6 +13,7 @@ import PackageUploadModal from './PackageUploadModal';
 import PackageRepoModal from './PackageRepoModal';
 import IncidentPanel from './IncidentPanel';
 import NotificationSettingsModal from './NotificationSettingsModal';
+import IncidentHistoryModal from './IncidentHistoryModal';
 
 const CURRENT_OPS_VERSION = '2026.03.29-1';
 
@@ -100,6 +101,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [incidentPanelOpen, setIncidentPanelOpen] = useState(false);
   const [incidentServerFilter, setIncidentServerFilter] = useState('');
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
+  const [incidentHistoryOpen, setIncidentHistoryOpen] = useState(false);
   const [packageRepoRefreshKey, setPackageRepoRefreshKey] = useState(0);
   const [rules, setRules] = useState(initialRules);
   const [toast, setToast] = useState(null);
@@ -306,6 +308,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setRulesOpen(true)}>监控规则</button>
           <button className="primaryBtn compactPageBtn incidentBtn" type="button" onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>🚨 Incidents{incidentStats.open > 0 ? ` (${incidentStats.open})` : ''}</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setNotifSettingsOpen(true)}>🔔 通知</button>
+          <button className="pageBtn compactPageBtn" type="button" onClick={() => setIncidentHistoryOpen(true)}>📊 趋势</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageRepoOpen(true)}>包仓库</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={() => setPackageUploadOpen(true)}>上传安装包</button>
           <button className="pageBtn compactPageBtn" type="button" onClick={refreshNow}>立即刷新</button>
@@ -442,6 +445,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       <PackageUploadModal open={packageUploadOpen} onClose={() => setPackageUploadOpen(false)} onUploaded={(data) => { setPackageRepoRefreshKey((x) => x + 1); setPackageRepoOpen(true); setToast({ type: 'success', text: `上传成功：release=${data.release || '-'}${data.stable_url ? '，已发布为 stable' : ''}` }); }} />
       <IncidentPanel open={incidentPanelOpen} onClose={() => { setIncidentPanelOpen(false); setIncidentServerFilter(''); }} initialServerFilter={incidentServerFilter} />
       <NotificationSettingsModal open={notifSettingsOpen} onClose={() => setNotifSettingsOpen(false)} onSaved={() => setToast({ type: 'success', text: '通知设置已保存' })} />
+      <IncidentHistoryModal open={incidentHistoryOpen} onClose={() => setIncidentHistoryOpen(false)} />
     </>
   );
 }

@@ -261,6 +261,47 @@ app.patch('/api/settings/notifications', authMiddleware, (req, res) => {
 });
 app.get('/api/actions/definitions', authMiddleware, (req, res) => { const rows = db.prepare(`SELECT action_key, name, display_name, category, description, param_schema, role_scope, risk_level, timeout_seconds, executor_type, cooldown_seconds, max_retries, auto_enabled, requires_approval, batch_enabled, trigger_faults, success_criteria, fallback_action_key, priority, metadata FROM action_definitions WHERE enabled = 1 ORDER BY priority ASC, id ASC`).all(); res.json(rows.map((row) => ({ ...row, role_scope: JSON.parse(row.role_scope || '[]'), param_schema: JSON.parse(row.param_schema || '{}'), trigger_faults: JSON.parse(row.trigger_faults || '[]'), success_criteria: JSON.parse(row.success_criteria || '{}'), metadata: JSON.parse(row.metadata || '{}') }))); });
 app.get('/api/incidents', authMiddleware, (req, res) => { const { status, server_id, limit } = req.query || {}; const where = []; const params = []; if (status) { where.push('status = ?'); params.push(status); } if (server_id) { where.push('server_id = ?'); params.push(server_id); } const sql = `SELECT * FROM incidents ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY last_seen_at DESC, id DESC LIMIT ?`; params.push(Math.max(1, Math.min(Number(limit || 50), 200))); res.json(db.prepare(sql).all(...params)); });
+
+app.get('/api/incidents/stats', authMiddleware, (req, res) => {
+  const days = Math.max(1, Math.min(Number(req.query.days || 7), 30));
+  const rows = db.prepare(`
+    SELECT
+      date(first_seen_at) as day,
+      COUNT(*) as total,
+      SUM(CASE WHEN status = 'open' OR status = 'acknowledged' THEN 1 ELSE 0 END) as open_count,
+      SUM(CASE WHEN status = 'auto_remediating' THEN 1 ELSE 0 END) as remediating_count,
+      SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_count,
+      SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count
+    FROM incidents
+    WHERE first_seen_at >= date('now', '-' || ? || ' days')
+    GROUP BY date(first_seen_at)
+    ORDER BY day ASC
+  `).all(days);
+  const byFault = db.prepare(`
+    SELECT fault_type, COUNT(*) as count
+    FROM incidents
+    WHERE first_seen_at >= date('now', '-' || ? || ' days')
+    GROUP BY fault_type
+    ORDER BY count DESC
+  `).all(days);
+  const totalAll = db.prepare(`SELECT COUNT(*) as count FROM incidents`).get();
+  res.json({ days: rows, byFault, totalIncidents: totalAll.count });
+});
+
+app.get('/api/incidents/export', authMiddleware, (req, res) => {
+  const all = db.prepare(`SELECT * FROM incidents ORDER BY first_seen_at DESC`).all();
+  const header = 'id,incident_key,server_id,fault_type,severity,status,title,details,suggested_action,first_seen_at,last_seen_at,resolved_at,action_task_id';
+  const csvRows = all.map(r => [
+    r.id, r.incident_key, r.server_id, r.fault_type, r.severity, r.status,
+    `"${(r.title || '').replace(/"/g, '""')}"`,
+    `"${(r.details || '').replace(/"/g, '""')}"`,
+    r.suggested_action, r.first_seen_at, r.last_seen_at, r.resolved_at || '', r.action_task_id || ''
+  ].join(','));
+  const csv = [header, ...csvRows].join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=incidents_export.csv');
+  res.send(csv);
+});
 app.get('/api/packages/checksums', authMiddleware, (req, res) => {
   try {
     const xray = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'xcore.zip');
