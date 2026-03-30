@@ -636,6 +636,9 @@ th.stickyCol { background: #fcfcfd; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
+.incidentStatsGrid {
+  margin-top: -4px;
+}
 
 .statCard {
   background: var(--surface);

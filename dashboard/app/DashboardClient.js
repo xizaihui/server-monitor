@@ -275,14 +275,20 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         <div className="statCard healthy"><span>Healthy</span><strong>{stats.healthy}</strong></div>
         <div className="statCard problem"><span>Problem</span><strong>{stats.problem}</strong></div>
         <div className="statCard offline"><span>Offline</span><strong>{stats.offline}</strong></div>
-        <div className={`statCard ${incidentStats.open > 0 ? 'problem' : 'healthy'}`} style={{ cursor: 'pointer' }} onClick={() => setIncidentPanelOpen(true)}>
+      </section>
+
+      <section className="statsGrid incidentStatsGrid">
+        <div className={`statCard ${incidentStats.open > 0 ? 'problem' : 'healthy'}`} style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
           <span>🚨 Open Incidents</span><strong>{incidentStats.open}</strong>
         </div>
-        <div className={`statCard ${incidentStats.remediating > 0 ? 'problem' : ''}`} style={{ cursor: 'pointer' }} onClick={() => setIncidentPanelOpen(true)}>
+        <div className={`statCard ${incidentStats.remediating > 0 ? 'problem' : ''}`} style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
           <span>🔧 Remediating</span><strong>{incidentStats.remediating}</strong>
         </div>
-        <div className={`statCard ${incidentStats.failed > 0 ? 'offline' : ''}`} style={{ cursor: 'pointer' }} onClick={() => setIncidentPanelOpen(true)}>
+        <div className={`statCard ${incidentStats.failed > 0 ? 'offline' : ''}`} style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
           <span>❌ Failed</span><strong>{incidentStats.failed}</strong>
+        </div>
+        <div className="statCard" style={{ cursor: 'pointer' }} onClick={() => { setIncidentServerFilter(''); setIncidentPanelOpen(true); }}>
+          <span>✅ Resolved</span><strong>{incidentStats.resolved}</strong>
         </div>
       </section>
 
