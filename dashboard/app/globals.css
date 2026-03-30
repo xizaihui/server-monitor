@@ -462,25 +462,25 @@ button { -webkit-tap-highlight-color: transparent; cursor: pointer; }
 /* ── Table ── */
 table {
   width: 100%;
-  min-width: 940px;
+  min-width: 760px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
 }
 
-.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 940px; }
+.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 760px; }
 
-thead th:nth-child(1) { width: 36px; }
-thead th:nth-child(2) { width: 140px; }
-thead th:nth-child(3) { width: 88px; }
-thead th:nth-child(4) { width: 80px; }
-thead th:nth-child(5) { width: 100px; }
-thead th:nth-child(6), thead th:nth-child(7), thead th:nth-child(8) { width: 80px; }
-thead th:nth-child(9), thead th:nth-child(10), thead th:nth-child(11), thead th:nth-child(12) { width: 48px; }
-thead th:nth-child(13) { width: 52px; }
+thead th:nth-child(1) { width: 32px; }
+thead th:nth-child(2) { width: 120px; }
+thead th:nth-child(3) { width: 64px; }
+thead th:nth-child(4) { width: 72px; }
+thead th:nth-child(5) { width: 82px; }
+thead th:nth-child(6), thead th:nth-child(7), thead th:nth-child(8) { width: 62px; }
+thead th:nth-child(9), thead th:nth-child(10), thead th:nth-child(11), thead th:nth-child(12) { width: 40px; }
+thead th:nth-child(13) { width: 48px; }
 
 th, td {
-  padding: 8px 8px;
+  padding: 7px 4px;
   text-align: left;
   vertical-align: middle;
   border-bottom: 1px solid var(--color-border-subtle);
@@ -530,7 +530,7 @@ tr:hover td { background: var(--color-border-subtle); }
   z-index: 3;
 }
 
-.stickyOffsetCol { left: 36px; width: 140px; }
+.stickyOffsetCol { left: 32px; width: 120px; }
 th.stickyCol { background: var(--color-bg); }
 .stickyBodyCol { background: inherit; box-shadow: 1px 0 0 0 var(--color-border-subtle); }
 
@@ -809,19 +809,26 @@ tr:hover .inlineCopyBtn { opacity: 1; }
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: center;
   z-index: 80;
+  overflow-y: auto;
+  padding: 24px 12px;
 }
 
 .drawerPanel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
   width: 460px;
   max-width: 100%;
-  height: 100%;
   background: var(--color-surface);
   box-shadow: -4px 0 24px rgba(0,0,0,0.08);
   padding: 24px;
-  overflow: auto;
+  overflow-y: auto;
   border-left: 1px solid var(--color-border);
+  z-index: 81;
 }
 
 .drawerHeader {
@@ -867,17 +874,20 @@ tr:hover .inlineCopyBtn { opacity: 1; }
 /* ── Modal ── */
 .modalCard {
   width: 460px;
-  max-width: calc(100vw - 24px);
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0,0,0,0.12);
   padding: 24px;
-  margin: auto;
   border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .largeModal { width: 780px; }
-.modalBody { margin-top: 12px; display: grid; gap: 10px; }
+.modalBody { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; flex: 1; min-height: 0; }
 .fieldLabel { font-size: 12px; line-height: 1.4; color: var(--color-muted); font-weight: 400; }
 .fullInput { width: 100%; }
 .modalActions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
@@ -1018,7 +1028,7 @@ tr:hover .inlineCopyBtn { opacity: 1; }
 }
 
 /* ── Incident Panel ── */
-.incidentPanelModal { width: min(960px, 95vw); max-height: 90vh; overflow-y: auto; }
+.incidentPanelModal { width: min(960px, 95vw); max-height: calc(100vh - 48px); }
 .incidentToolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px 20px; border-bottom: 1px solid var(--color-border); }
 .incidentListWrap { padding: 10px 20px; display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
 
@@ -1072,5 +1082,5 @@ tr, td, .metricCompactCell, .portSquare, .badge, .iconButton { transition: none 
   .page { padding: 0 12px; }
   .drawerPanel, .modalCard, .largeModal, .loginCard { width: 100%; }
   .toast { left: 10px; right: 10px; top: 10px; }
-  table, .compactMainTable, .noTaskColTable { min-width: 880px; }
+  table, .compactMainTable, .noTaskColTable { min-width: 760px; }
 }
