@@ -249,6 +249,9 @@ func executeTask(serverID string, task ActionTask) TaskResult {
     if task.ActionKey == "init_ops_scripts" {
         return executeInitOpsScripts(serverID, task)
     }
+    if task.ActionKey == "upgrade_agent" {
+        return executeUpgradeAgent(serverID, task)
+    }
     def, ok := actionRegistry[task.ActionKey]
     if !ok {
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "unsupported_action", ResultSummary: "action not supported by this agent", ErrorMessage: "unsupported action"}
@@ -376,6 +379,109 @@ func executeInitOpsScripts(serverID string, task ActionTask) TaskResult {
     _ = os.RemoveAll(extractDir)
 
     return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "脚本初始化成功", LogExcerpt: fmt.Sprintf("ops scripts initialized from %s to %s", opsURL, targetDir)}
+}
+
+// executeUpgradeAgent handles agent self-upgrade.
+// Key difference: the agent must report success BEFORE restarting itself,
+// because the restart kills this process. We download + install in Go code,
+// report the result, then schedule a delayed self-restart.
+func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
+    downloadBase := "http://43.165.172.3/downloads"
+    if v, ok := task.Params["download_base"]; ok && strings.TrimSpace(fmt.Sprint(v)) != "" {
+        downloadBase = strings.TrimSpace(fmt.Sprint(v))
+    }
+
+    agentDir := "/opt/server-monitor/agent"
+    binPath := agentDir + "/server-monitor-agent"
+    var logs strings.Builder
+
+    logf := func(format string, args ...interface{}) {
+        line := fmt.Sprintf("[%s] %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
+        logs.WriteString(line)
+        fmt.Print(line)
+    }
+
+    // Determine architecture
+    arch := runtime.GOARCH
+    asset := "agent-linux-amd64"
+    if arch == "arm64" {
+        asset = "agent-linux-arm64"
+    }
+
+    // Download
+    logf("Downloading new agent binary: %s/%s", downloadBase, asset)
+    client := &http.Client{Timeout: 180 * time.Second}
+    resp, err := client.Get(fmt.Sprintf("%s/%s", downloadBase, asset))
+    if err != nil {
+        logf("ERROR: download failed: %v", err)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "download_failed", ResultSummary: "下载 agent 二进制失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != 200 {
+        logf("ERROR: download returned status %d", resp.StatusCode)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "download_failed", ResultSummary: fmt.Sprintf("下载失败 HTTP %d", resp.StatusCode), LogExcerpt: logs.String()}
+    }
+
+    tmpPath := "/tmp/server-monitor-agent-upgrade"
+    out, err := os.Create(tmpPath)
+    if err != nil {
+        logf("ERROR: create temp file failed: %v", err)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "io_error", ResultSummary: "创建临时文件失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
+    }
+    written, err := io.Copy(out, resp.Body)
+    out.Close()
+    if err != nil {
+        logf("ERROR: write failed: %v", err)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "io_error", ResultSummary: "写入临时文件失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
+    }
+    logf("Downloaded %d bytes", written)
+
+    // Size sanity check
+    if written < 1000000 {
+        logf("ERROR: binary too small (%d bytes)", written)
+        os.Remove(tmpPath)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "invalid_binary", ResultSummary: "下载的二进制文件过小", LogExcerpt: logs.String()}
+    }
+
+    os.Chmod(tmpPath, 0755)
+
+    // Backup current binary
+    if _, err := os.Stat(binPath); err == nil {
+        bakPath := binPath + ".bak"
+        data, _ := os.ReadFile(binPath)
+        os.WriteFile(bakPath, data, 0755)
+        logf("Backed up current binary to %s", bakPath)
+    }
+
+    // Install new binary
+    data, err := os.ReadFile(tmpPath)
+    if err != nil {
+        logf("ERROR: read temp binary failed: %v", err)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "io_error", ResultSummary: "读取临时文件失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
+    }
+    if err := os.WriteFile(binPath, data, 0755); err != nil {
+        logf("ERROR: install binary failed: %v", err)
+        return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
+    }
+    os.Remove(tmpPath)
+    logf("Installed new binary to %s", binPath)
+
+    // Schedule self-restart AFTER this function returns and result is reported.
+    // The main loop will report this result, then we exit so systemd/nohup can restart us.
+    logf("Agent upgrade completed, scheduling self-restart in 3 seconds...")
+    go func() {
+        time.Sleep(3 * time.Second)
+        fmt.Println("[upgrade] Self-restarting agent...")
+        // Try systemd restart first
+        cmd := osExec.Command("systemctl", "restart", "server-monitor-agent")
+        if err := cmd.Run(); err != nil {
+            // No systemd service; just exit and let nohup wrapper or parent restart
+            fmt.Println("[upgrade] systemd restart failed, exiting for manual restart")
+            os.Exit(0)
+        }
+    }()
+
+    return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "Agent 升级成功，即将自动重启", LogExcerpt: logs.String()}
 }
 
 func hasFiles(dir string) bool {
