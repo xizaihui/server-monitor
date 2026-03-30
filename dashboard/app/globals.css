@@ -765,6 +765,20 @@ tr.offlineRow td:last-child { background: #f8f8f8; }
   display: inline-block;
 }
 
+/* ── Alert sound toggle ── */
+.alertSoundToggle {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.alertSoundToggle:hover { opacity: 1; }
+.alertSoundToggle.off { opacity: 0.35; }
+
 /* ── Copy button ── */
 .inlineCopyBtn { opacity: 0; transition: opacity 0.1s ease; }
 tr:hover .inlineCopyBtn { opacity: 1; }

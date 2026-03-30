@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import ServerActions from './ServerActions';
 import NodeDrawer from './NodeDrawer';
 import ServerModal from './ServerModal';
@@ -80,6 +80,44 @@ function readinessFilter(status, server) {
   return server.status === status;
 }
 
+/* ── Alert sound via Web Audio API ── */
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+function playAlertSound() {
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    // Two-tone urgent beep pattern: beep-beep, pause, beep-beep
+    const pattern = [
+      { freq: 880, start: 0, dur: 0.12 },
+      { freq: 880, start: 0.18, dur: 0.12 },
+      { freq: 1100, start: 0.45, dur: 0.12 },
+      { freq: 1100, start: 0.63, dur: 0.12 },
+    ];
+    for (const { freq, start, dur } of pattern) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + start);
+      gain.gain.linearRampToValueAtTime(0.15, now + start + 0.01);
+      gain.gain.setValueAtTime(0.15, now + start + dur - 0.02);
+      gain.gain.linearRampToValueAtTime(0, now + start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + start);
+      osc.stop(now + start + dur);
+    }
+  } catch {}
+}
+
 export default function DashboardClient({ servers: initialServers, groups, selectedGroup = 'ALL', initialRules }) {
   const [servers, setServers] = useState(initialServers.filter((x) => x.ip !== '127.0.0.2' && x.server_id !== 'manual-test-node'));
   const [query, setQuery] = useState('');
@@ -107,6 +145,11 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [toast, setToast] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [incidentStats, setIncidentStats] = useState({ open: 0, remediating: 0, failed: 0, resolved: 0 });
+  const [alertSoundEnabled, setAlertSoundEnabled] = useState(true);
+  const alertSoundRef = useRef(true);
+  const prevProblemIdsRef = useRef(null);
+
+  useEffect(() => { alertSoundRef.current = alertSoundEnabled; }, [alertSoundEnabled]);
 
   useEffect(() => {
     if (!toast) return;
@@ -164,7 +207,16 @@ export default function DashboardClient({ servers: initialServers, groups, selec
       if (!res.ok) return;
       const data = await res.json();
       if (!Array.isArray(data.servers)) return;
-      setServers(normalizeIncoming(data.servers));
+      const normalized = normalizeIncoming(data.servers);
+      setServers(normalized);
+
+      // Detect NEW problem nodes and trigger alert sound
+      const currentProblemIds = new Set(normalized.filter(isProblem).map(s => s.server_id));
+      if (prevProblemIdsRef.current !== null && alertSoundRef.current) {
+        const hasNewProblem = [...currentProblemIds].some(id => !prevProblemIdsRef.current.has(id));
+        if (hasNewProblem) playAlertSound();
+      }
+      prevProblemIdsRef.current = currentProblemIds;
     } catch {}
     try {
       const incRes = await fetch('/api/proxy/incidents?limit=200', { cache: 'no-store' });
@@ -316,6 +368,14 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         <div className="toolbarGroup small liveInfo">
           <span className="liveDot"></span>
           <span>自动刷新 10s</span>
+          <button
+            type="button"
+            className={`alertSoundToggle ${alertSoundEnabled ? 'on' : 'off'}`}
+            title={alertSoundEnabled ? '报警声音已开启' : '报警声音已关闭'}
+            onClick={() => setAlertSoundEnabled(!alertSoundEnabled)}
+          >
+            {alertSoundEnabled ? '🔔' : '🔕'}
+          </button>
           <span>每页</span>
           <select className="select compactSelect" value={pageSize} onChange={(e) => onChangePageSize(e.target.value)}>
             {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
