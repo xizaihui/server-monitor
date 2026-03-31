@@ -432,21 +432,12 @@ app.post('/api/packages/:name/rollback', authMiddleware, (req, res) => {
     return res.status(500).json({ error: error.message || 'rollback failed' });
   }
 });
-app.get('/api/packages/md5', authMiddleware, (req, res) => {
+app.get('/api/packages/md5', (req, res) => {
   try {
-    const pkg = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'xcore.zip');
-    if (!fs.existsSync(pkg)) return res.status(404).type('text/plain').send('xray=NOT_FOUND\nsingbox=NOT_FOUND\n');
-    const tmpDir = fs.mkdtempSync('/tmp/xcore-md5-');
-    try {
-      execFileSync('unzip', ['-qo', pkg, '-d', tmpDir]);
-      const xrayPath = path.join(tmpDir, 'xcore', 'xray');
-      const singboxPath = path.join(tmpDir, 'xcore', 'singbox');
-      const xrayMd5 = fs.existsSync(xrayPath) ? fileMd5(xrayPath) : 'NOT_FOUND';
-      const singboxMd5 = fs.existsSync(singboxPath) ? fileMd5(singboxPath) : 'NOT_FOUND';
-      res.type('text/plain').send(`xray=${xrayMd5}\nsingbox=${singboxMd5}\n`);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    const expected = computeExpectedMd5s();
+    const xrayMd5 = expected.xray_md5 || 'NOT_FOUND';
+    const singboxMd5 = expected.singbox_md5 || 'NOT_FOUND';
+    res.type('text/plain').send(`xray=${xrayMd5}\nsingbox=${singboxMd5}\n`);
   } catch (error) {
     res.status(500).type('text/plain').send('xray=ERROR\nsingbox=ERROR\n');
   }
