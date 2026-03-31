@@ -470,22 +470,29 @@ button { -webkit-tap-highlight-color: transparent; cursor: pointer; }
 /* ── Table ── */
 table {
   width: 100%;
-  min-width: 700px;
+  min-width: 1100px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
 }
 
-.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 960px; }
+.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 1100px; }
 
-thead th:nth-child(1) { width: 30px; }
-thead th:nth-child(2) { width: 110px; }
-thead th:nth-child(3) { width: 52px; }
-thead th:nth-child(4) { width: 64px; }
-thead th:nth-child(5) { width: 72px; }
-thead th:nth-child(6), thead th:nth-child(7), thead th:nth-child(8) { width: 52px; }
-thead th:nth-child(9), thead th:nth-child(10), thead th:nth-child(11), thead th:nth-child(12) { width: 36px; }
-thead th:nth-child(13) { width: 80px; position: sticky; right: 0; background: var(--color-bg); z-index: 2; }
+/* 14 columns: checkbox | 服务器 | server-id | 状态 | 脚本版本 | CPU | 内存 | 磁盘 | singbox | xray | redis | xagent | xbridge | 操作 */
+thead th:nth-child(1) { width: 28px; }       /* checkbox */
+thead th:nth-child(2) { width: 130px; }       /* 服务器 (IP + version subline) */
+thead th:nth-child(3) { width: 72px; }        /* server-id */
+thead th:nth-child(4) { width: 56px; }        /* 状态 */
+thead th:nth-child(5) { width: 76px; }        /* 脚本版本 */
+thead th:nth-child(6) { width: 56px; }        /* CPU */
+thead th:nth-child(7) { width: 56px; }        /* 内存 */
+thead th:nth-child(8) { width: 56px; }        /* 磁盘 */
+thead th:nth-child(9) { width: 60px; }        /* singbox */
+thead th:nth-child(10) { width: 60px; }       /* xray */
+thead th:nth-child(11) { width: 48px; }       /* redis */
+thead th:nth-child(12) { width: 60px; }       /* xagent */
+thead th:nth-child(13) { width: 64px; }       /* xbridge */
+thead th:nth-child(14) { width: 56px; position: sticky; right: 0; background: var(--color-bg); z-index: 2; } /* 操作 */
 
 th, td {
   padding: 7px 4px;
@@ -644,7 +651,7 @@ tr.offlineRow td:last-child { background: #f8f8f8; }
 }
 
 .metricCompactCell, .metricCellTight {
-  width: 58px;
+  width: 48px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1161,14 +1168,14 @@ tr, td, .metricCompactCell, .portSquare, .badge, .iconButton { transition: none 
   .searchInput { min-width: 200px; }
   .statsGrid { flex-direction: column; }
   .inlineCopyBtn { opacity: 1; }
-  table, .compactMainTable, .noTaskColTable { min-width: 1020px; }
+  table, .compactMainTable, .noTaskColTable { min-width: 1100px; }
 }
 
 @media (max-width: 640px) {
   .page { padding: 0 12px; }
   .drawerPanel, .modalCard, .largeModal, .loginCard { width: 100%; }
   .toast { left: 10px; right: 10px; top: 10px; }
-  table, .compactMainTable, .noTaskColTable { min-width: 800px; }
+  table, .compactMainTable, .noTaskColTable { min-width: 1000px; }
 }
 /* ── Clickable Badge (一键更新) ── */
 .clickableBadge {
