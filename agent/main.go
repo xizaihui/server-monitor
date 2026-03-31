@@ -281,9 +281,8 @@ func executeTask(serverID string, task ActionTask) TaskResult {
     if task.ActionKey == "init_ops_scripts" {
         return executeInitOpsScripts(serverID, task)
     }
-    if task.ActionKey == "upgrade_agent" {
-        return executeUpgradeAgent(serverID, task)
-    }
+    // upgrade_agent now uses the shell script via normal actionRegistry path
+    // (removed special Go-based executeUpgradeAgent which had unreliable systemd-run/setsid restart)
     def, ok := actionRegistry[task.ActionKey]
     if !ok {
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: -1, ResultCode: "unsupported_action", ResultSummary: "action not supported by this agent", ErrorMessage: "unsupported action"}
