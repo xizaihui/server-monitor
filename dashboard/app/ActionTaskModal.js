@@ -120,18 +120,27 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
     setSubmitting(true);
     setError('');
     try {
-      const params = buildParams();
-      const requests = targetServers.map((item) => fetch('/api/proxy/actions/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          server_id: item.server_id,
-          action_key: actionKey,
-          params,
-          source: isBulk ? 'dashboard-bulk' : 'dashboard',
-          created_by: isBulk ? 'dashboard-bulk' : 'dashboard'
-        })
-      }).then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => ({})) })));
+      const baseParams = buildParams();
+      // For actions that need per-node server_id/server_ip, override from each node's own data
+      const needsPerNodeParams = ['all_install', 'install_ixvpn', 'install_xnftables'].includes(actionKey);
+      const requests = targetServers.map((item) => {
+        let params = { ...baseParams };
+        if (needsPerNodeParams) {
+          if ('server_id' in params) params.server_id = item.instance_id || item.server_id || baseParams.server_id;
+          if ('server_ip' in params) params.server_ip = item.ip || baseParams.server_ip;
+        }
+        return fetch('/api/proxy/actions/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            server_id: item.server_id,
+            action_key: actionKey,
+            params,
+            source: isBulk ? 'dashboard-bulk' : 'dashboard',
+            created_by: isBulk ? 'dashboard-bulk' : 'dashboard'
+          })
+        }).then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => ({})) }));
+      });
 
       const results = await Promise.all(requests);
       setSubmitting(false);
