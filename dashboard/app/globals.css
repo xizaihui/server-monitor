@@ -1170,3 +1170,38 @@ tr, td, .metricCompactCell, .portSquare, .badge, .iconButton { transition: none 
   .toast { left: 10px; right: 10px; top: 10px; }
   table, .compactMainTable, .noTaskColTable { min-width: 700px; }
 }
+/* ── Clickable Badge (一键更新) ── */
+.clickableBadge {
+  cursor: pointer;
+  border: none;
+  font: inherit;
+  transition: opacity 0.15s, filter 0.15s;
+}
+.clickableBadge:hover {
+  opacity: 0.8;
+  filter: brightness(0.9);
+  text-decoration: underline;
+}
+.clickableBadge:active {
+  opacity: 0.6;
+}
+button.compVerBadge.clickableBadge {
+  cursor: pointer;
+  border: none;
+  font-size: 10px;
+  line-height: 1;
+  margin-top: 3px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  display: inline-block;
+  background: rgba(255, 59, 48, 0.12);
+  color: var(--color-danger);
+}
+button.inlineReadiness.clickableBadge {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font: inherit;
+  padding: 0;
+}
