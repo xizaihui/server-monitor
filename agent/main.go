@@ -394,7 +394,7 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
 
     agentDir := "/opt/server-monitor/agent"
     binPath := agentDir + "/server-monitor-agent"
-    tmpPath := agentDir + "/server-monitor-agent.upgrade.tmp"
+    tmpPath := agentDir + "/.upgrade.tmp"
     var logs strings.Builder
 
     logf := func(format string, args ...interface{}) {
@@ -410,7 +410,7 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
         asset = "agent-linux-arm64"
     }
 
-    // Download
+    // Download to same directory (guarantees same-fs for rename)
     logf("Downloading new agent binary: %s/%s", downloadBase, asset)
     client := &http.Client{Timeout: 180 * time.Second}
     resp, err := client.Get(fmt.Sprintf("%s/%s", downloadBase, asset))
@@ -424,71 +424,55 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "download_failed", ResultSummary: fmt.Sprintf("下载失败 HTTP %d", resp.StatusCode), LogExcerpt: logs.String()}
     }
 
-    out, err := os.Create(tmpPath)
+    outFile, err := os.Create(tmpPath)
     if err != nil {
         logf("ERROR: create temp file failed: %v", err)
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "io_error", ResultSummary: "创建临时文件失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
     }
-    written, err := io.Copy(out, resp.Body)
-    out.Close()
+    written, err := io.Copy(outFile, resp.Body)
+    outFile.Close()
     if err != nil {
         logf("ERROR: write failed: %v", err)
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "io_error", ResultSummary: "写入临时文件失败", LogExcerpt: logs.String(), ErrorMessage: err.Error()}
     }
     logf("Downloaded %d bytes", written)
 
-    // Size sanity check
     if written < 1000000 {
         logf("ERROR: binary too small (%d bytes)", written)
         os.Remove(tmpPath)
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "invalid_binary", ResultSummary: "下载的二进制文件过小", LogExcerpt: logs.String()}
     }
-
     os.Chmod(tmpPath, 0755)
 
-    // Backup current binary
+    // MD5 comparison — skip if already current
     if _, err := os.Stat(binPath); err == nil {
-        bakPath := binPath + ".bak"
-        data, _ := os.ReadFile(binPath)
-        os.WriteFile(bakPath, data, 0755)
-        logf("Backed up current binary to %s", bakPath)
-    }
-
-    // CRITICAL: Linux allows unlink of a running binary (process keeps its fd to the old inode).
-    // After unlink, rename the new file into place. This is atomic on same filesystem.
-    // We download to the same directory to guarantee same-filesystem rename.
-    if err := os.Remove(binPath); err != nil && !os.IsNotExist(err) {
-        logf("WARNING: could not remove old binary: %v", err)
-    }
-    if err := os.Rename(tmpPath, binPath); err != nil {
-        logf("ERROR: rename failed: %v — trying copy via shell", err)
-        // Last resort: use cp which handles ETXTBSY by unlinking internally
-        cmd := osExec.Command("bash", "-c", fmt.Sprintf("rm -f %s && cp %s %s && chmod 755 %s", shellEscape(binPath), shellEscape(tmpPath), shellEscape(binPath), shellEscape(binPath)))
-        if out, shellErr := cmd.CombinedOutput(); shellErr != nil {
-            logf("ERROR: shell copy also failed: %v — %s", shellErr, strings.TrimSpace(string(out)))
-            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: shellErr.Error()}
+        oldMd5 := fileMd5Sum(binPath)
+        newMd5 := fileMd5Sum(tmpPath)
+        if oldMd5 != "" && oldMd5 == newMd5 {
+            os.Remove(tmpPath)
+            logf("Agent binary already up to date (MD5 match)")
+            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "already_current", ResultSummary: "Agent 已是最新版本", LogExcerpt: logs.String()}
         }
     }
-    os.Chmod(binPath, 0755)
-    os.Remove(tmpPath)
-    logf("Installed new binary to %s", binPath)
 
-    // Schedule self-restart AFTER this function returns and result is reported.
-    // The main loop will report this result, then we exit so systemd/nohup can restart us.
-    logf("Agent upgrade completed, scheduling self-restart in 3 seconds...")
-    go func() {
-        time.Sleep(3 * time.Second)
-        fmt.Println("[upgrade] Self-restarting agent...")
-        // Try systemd restart first
-        cmd := osExec.Command("systemctl", "restart", "server-monitor-agent")
-        if err := cmd.Run(); err != nil {
-            // No systemd service; just exit and let nohup wrapper or parent restart
-            fmt.Println("[upgrade] systemd restart failed, exiting for manual restart")
-            os.Exit(0)
-        }
-    }()
+    // Use systemd-run to create a detached transient unit that survives agent restart.
+    // This process will: stop agent → replace binary → start agent.
+    // The agent reports success BEFORE the detached process runs.
+    logf("Scheduling detached upgrade via systemd-run...")
+    upgradeScript := fmt.Sprintf(
+        `sleep 2; [ -f '%s' ] && cp '%s' '%s.bak'; systemctl stop server-monitor-agent 2>/dev/null || true; sleep 1; rm -f '%s'; mv '%s' '%s'; chmod 755 '%s'; systemctl start server-monitor-agent`,
+        binPath, binPath, binPath, binPath, tmpPath, binPath, binPath)
+    cmd := osExec.Command("systemd-run", "--unit=sm-agent-upgrade", "--description=Monitor Agent Upgrade", "bash", "-c", upgradeScript)
+    if out, err := cmd.CombinedOutput(); err != nil {
+        logf("systemd-run failed: %v %s — trying setsid fallback", err, strings.TrimSpace(string(out)))
+        // Fallback: setsid to escape cgroup
+        fallback := osExec.Command("setsid", "bash", "-c", upgradeScript)
+        fallback.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+        fallback.Start()
+    }
 
-    return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "Agent 升级成功，即将自动重启", LogExcerpt: logs.String()}
+    logf("Detached upgrade scheduled, agent will restart in ~3s")
+    return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "success", ExitCode: 0, ResultCode: "ok", ResultSummary: "Agent 升级已调度，即将自动重启", LogExcerpt: logs.String()}
 }
 
 func hasFiles(dir string) bool {
