@@ -394,6 +394,7 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
 
     agentDir := "/opt/server-monitor/agent"
     binPath := agentDir + "/server-monitor-agent"
+    tmpPath := agentDir + "/server-monitor-agent.upgrade.tmp"
     var logs strings.Builder
 
     logf := func(format string, args ...interface{}) {
@@ -423,7 +424,6 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
         return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "download_failed", ResultSummary: fmt.Sprintf("下载失败 HTTP %d", resp.StatusCode), LogExcerpt: logs.String()}
     }
 
-    tmpPath := "/tmp/server-monitor-agent-upgrade"
     out, err := os.Create(tmpPath)
     if err != nil {
         logf("ERROR: create temp file failed: %v", err)
@@ -454,27 +454,24 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
         logf("Backed up current binary to %s", bakPath)
     }
 
-    // CRITICAL: Cannot write to a running binary on Linux (ETXTBSY).
-    // Must delete the old file first, then rename the new one in.
-    // The running process keeps its fd to the old (deleted) inode.
+    // CRITICAL: Linux allows unlink of a running binary (process keeps its fd to the old inode).
+    // After unlink, rename the new file into place. This is atomic on same filesystem.
+    // We download to the same directory to guarantee same-filesystem rename.
     if err := os.Remove(binPath); err != nil && !os.IsNotExist(err) {
-        logf("WARNING: could not remove old binary: %v (trying rename anyway)", err)
+        logf("WARNING: could not remove old binary: %v", err)
     }
     if err := os.Rename(tmpPath, binPath); err != nil {
-        // Fallback: copy
-        data, readErr := os.ReadFile(tmpPath)
-        if readErr != nil {
-            logf("ERROR: read temp binary failed: %v", readErr)
-            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: readErr.Error()}
-        }
-        if writeErr := os.WriteFile(binPath, data, 0755); writeErr != nil {
-            logf("ERROR: install binary failed: %v", writeErr)
-            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: writeErr.Error()}
+        logf("ERROR: rename failed: %v — trying copy via shell", err)
+        // Last resort: use cp which handles ETXTBSY by unlinking internally
+        cmd := osExec.Command("bash", "-c", fmt.Sprintf("rm -f %s && cp %s %s && chmod 755 %s", shellEscape(binPath), shellEscape(tmpPath), shellEscape(binPath), shellEscape(binPath)))
+        if out, shellErr := cmd.CombinedOutput(); shellErr != nil {
+            logf("ERROR: shell copy also failed: %v — %s", shellErr, strings.TrimSpace(string(out)))
+            return TaskResult{ServerID: serverID, LeaseToken: task.LeaseToken, Status: "failed", ExitCode: 1, ResultCode: "install_failed", ResultSummary: "安装新二进制失败", LogExcerpt: logs.String(), ErrorMessage: shellErr.Error()}
         }
     }
     os.Chmod(binPath, 0755)
     os.Remove(tmpPath)
-    logf("Installed new binary to %s (rm+rename method)", binPath)
+    logf("Installed new binary to %s", binPath)
 
     // Schedule self-restart AFTER this function returns and result is reported.
     // The main loop will report this result, then we exit so systemd/nohup can restart us.
