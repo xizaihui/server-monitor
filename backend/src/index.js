@@ -550,6 +550,27 @@ app.post('/api/uploads/packages', authMiddleware, (req, res) => {
       const releasePath = path.join(releasesDir, fileName);
       fs.writeFileSync(releasePath, fileBuffer);
       fs.chmodSync(releasePath, 0o644);
+
+      // Auto-inject VERSION file into zip packages (xagent, xbridge, xray, singbox, xassets)
+      const versionInjectionMap = {
+        'xagent': 'xagent-server/VERSION',
+        'xbridge': 'xbrigde-server/VERSION',
+        'xray': 'xray-server/VERSION',
+        'singbox': 'singbox-server/VERSION',
+        'xassets': 'xassets/VERSION',
+      };
+      if (fileName.endsWith('.zip') && versionInjectionMap[pkgName]) {
+        try {
+          const versionEntry = versionInjectionMap[pkgName];
+          const tmpDir = path.join('/tmp', `version-inject-${Date.now()}`);
+          fs.mkdirSync(path.join(tmpDir, path.dirname(versionEntry)), { recursive: true });
+          fs.writeFileSync(path.join(tmpDir, versionEntry), release + '\n');
+          execFileSync('bash', ['-c', `cd "${tmpDir}" && zip "${releasePath}" "${versionEntry}"`]);
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+          console.log(`VERSION injected: ${versionEntry} = ${release}`);
+        } catch (e) { console.log('VERSION inject warning:', e.message); }
+      }
+
       const currentPath = path.join(currentDir, fileName);
       let backupPath = '';
       if (fs.existsSync(currentPath)) {
