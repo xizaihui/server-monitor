@@ -15,7 +15,7 @@ import IncidentPanel from './IncidentPanel';
 import NotificationSettingsModal from './NotificationSettingsModal';
 import IncidentHistoryModal from './IncidentHistoryModal';
 
-const CURRENT_OPS_VERSION = '2026.03.31-9';
+const CURRENT_OPS_VERSION = '2026.03.31-10';
 
 function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -382,6 +382,8 @@ export default function DashboardClient({ servers: initialServers, groups, selec
     let params = {};
     if (actionKey === 'init_ops_scripts') {
       params = { ops_scripts_url: 'http://43.165.172.3/downloads/packages/ops/stable/current/ops-scripts.zip' };
+    } else if (actionKey === 'update_xray' || actionKey === 'update_singbox' || actionKey === 'update_xagent' || actionKey === 'update_xbridge' || actionKey === 'update_xassets') {
+      params = {};
     } else if (actionKey === 'update_xcore') {
       params = {};
     } else if (actionKey === 'install_ixvpn') {
@@ -506,7 +508,10 @@ export default function DashboardClient({ servers: initialServers, groups, selec
           <span>脚本目标版本 {CURRENT_OPS_VERSION}</span>
           {expectedChecksums?.xagent_version ? <span>xagent {expectedChecksums.xagent_version}</span> : null}
           {expectedChecksums?.xcore_version ? <span>xcore {expectedChecksums.xcore_version}</span> : null}
+          {expectedChecksums?.xray_version ? <span>xray {expectedChecksums.xray_version}</span> : null}
+          {expectedChecksums?.singbox_version ? <span>singbox {expectedChecksums.singbox_version}</span> : null}
           {expectedChecksums?.xbridge_version ? <span>xbridge {expectedChecksums.xbridge_version}</span> : null}
+          {expectedChecksums?.xassets_version ? <span>xassets {expectedChecksums.xassets_version}</span> : null}
           <span>共 {filtered.length} 台</span>
         </div>
       </section>
@@ -574,7 +579,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       </button>
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
-                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · {rb.rank < 2 ? <button type="button" className={`inlineReadiness ${rb.tone} clickableBadge`} onClick={() => quickUpdate(s, 'init_ops_scripts', '更新脚本')}>{rb.text}</button> : <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span>}{singboxBadge.outdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'update_xcore', '更新xcore')}> · singbox需更新</button> : null}</div>
+                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · {rb.rank < 2 ? <button type="button" className={`inlineReadiness ${rb.tone} clickableBadge`} onClick={() => quickUpdate(s, 'init_ops_scripts', '更新脚本')}>{rb.text}</button> : <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span>}{singboxBadge.outdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'update_singbox', '更新singbox')}> · singbox需更新</button> : null}</div>
                     <div className="small versionSubline">{targetGap(s)}</div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
@@ -588,10 +593,10 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                   <td><MetricBar value={s.cpu_usage} alert={hasIssue(s, 'CPU')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.memory_usage} alert={hasIssue(s, '内存')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.disk_usage} alert={hasIssue(s, '磁盘')} offline={s.status === 'offline'} /></td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>{xrayBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xcore', '更新xcore')}>需更新</button> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>{xrayBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xray', '更新xray')}>需更新</button> : null}</>}</td>
                   <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_6379 ? 'up' : 'down'}`}>{s.port_6379 ? 'UP' : 'DOWN'}</span>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>{xagentBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'install_ixvpn', '更新xagent')}>需更新</button> : null}</>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>{xbridgeBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'install_xnftables', '更新xbridge')}>需更新</button> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>{xagentBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xagent', '更新xagent')}>需更新</button> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>{xbridgeBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xbridge', '更新xbridge')}>需更新</button> : null}</>}</td>
                   <td>
                     <ServerActions server={s} compact onEdit={setEditServer} onDelete={setDeleteServer} onTaskHistory={setTaskHistoryServer} />
                   </td>

@@ -149,6 +149,37 @@ var actionRegistry = map[string]ActionDef{
         TimeoutSec: 15,
         ParamOrder: []string{"username"},
     },
+    // === 新增动作 ===
+    "all_install": {
+        ScriptPath: "/opt/core-service/scripts/all_install.sh",
+        TimeoutSec: 600,
+        ParamOrder: []string{"server_id", "server_ip"},
+    },
+    "update_xagent": {
+        ScriptPath: "/opt/core-service/scripts/update_xagent.sh",
+        TimeoutSec: 300,
+        ParamOrder: []string{},
+    },
+    "update_xbridge": {
+        ScriptPath: "/opt/core-service/scripts/update_xbridge.sh",
+        TimeoutSec: 300,
+        ParamOrder: []string{},
+    },
+    "update_xray": {
+        ScriptPath: "/opt/core-service/scripts/update_xray.sh",
+        TimeoutSec: 300,
+        ParamOrder: []string{},
+    },
+    "update_singbox": {
+        ScriptPath: "/opt/core-service/scripts/update_singbox.sh",
+        TimeoutSec: 300,
+        ParamOrder: []string{},
+    },
+    "update_xassets": {
+        ScriptPath: "/opt/core-service/scripts/update_xassets.sh",
+        TimeoutSec: 300,
+        ParamOrder: []string{},
+    },
 }
 
 func main() {
@@ -539,13 +570,23 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
         diag = collectDiagnostics(cpuUsage > 80, memUsage > 85, diskUsage > 55)
     }
 
-    // Collect component checksums for version tracking
+    // Collect component checksums for version tracking (new split paths)
     xagentMd5 := fileMd5Sum("/opt/core-service/xagent-server/xagent")
     xbridgeMd5 := fileMd5Sum("/opt/core-service/xbrigde-server/xvpn-bridge-server")
-    xrayMd5 := fileMd5Sum("/opt/core-service/xcore/xray")
-    singboxMd5 := fileMd5Sum("/opt/core-service/xcore/singbox")
+    xrayMd5 := fileMd5Sum("/opt/core-service/xray-server/xray")
+    singboxMd5 := fileMd5Sum("/opt/core-service/singbox-server/singbox")
+    // Fallback: try legacy xcore paths if new paths yield empty
+    if xrayMd5 == "" { xrayMd5 = fileMd5Sum("/opt/core-service/xcore/xray") }
+    if singboxMd5 == "" { singboxMd5 = fileMd5Sum("/opt/core-service/xcore/singbox") }
 
-    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.8.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion, "xagent_md5": xagentMd5, "xbridge_md5": xbridgeMd5, "xray_md5": xrayMd5, "singbox_md5": singboxMd5}, Diagnostics: diag}, nil
+    // Read VERSION files for each component
+    xagentVersion := readVersionFile("/opt/core-service/xagent-server/VERSION")
+    xrayVersion := readVersionFile("/opt/core-service/xray-server/VERSION")
+    singboxVersion := readVersionFile("/opt/core-service/singbox-server/VERSION")
+    xbridgeVersion := readVersionFile("/opt/core-service/xbrigde-server/VERSION")
+    xassetsVersion := readVersionFile("/opt/core-service/xassets/VERSION")
+
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.9.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion, "xagent_md5": xagentMd5, "xbridge_md5": xbridgeMd5, "xray_md5": xrayMd5, "singbox_md5": singboxMd5, "xagent_version": xagentVersion, "xray_version": xrayVersion, "singbox_version": singboxVersion, "xbridge_version": xbridgeVersion, "xassets_version": xassetsVersion}, Diagnostics: diag}, nil
 }
 
 func collectDiagnostics(cpuAlert, memAlert, diskAlert bool) *Diagnostics {

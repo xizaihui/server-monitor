@@ -64,13 +64,13 @@ const DEFAULT_ACTION_DEFINITIONS = [
     action_key: 'restart_xagent', name: '重启 xagent', display_name: '重启 xagent', category: 'safe', description: '重启 xagent 服务并校验 8888 端口',
     script_path: '/opt/core-service/scripts/restart_xagent.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
     risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
-    trigger_faults: JSON.stringify(['port_8888_down', 'agent_heartbeat_timeout']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: 'install_ixvpn', priority: 10, metadata: JSON.stringify({})
+    trigger_faults: JSON.stringify(['port_8888_down', 'agent_heartbeat_timeout']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: 'update_xagent', priority: 10, metadata: JSON.stringify({})
   },
   {
     action_key: 'restart_xbridge', name: '重启 xbridge', display_name: '重启 xbridge', category: 'safe', description: '重启 xvpn-bridge-server 服务并校验 8789 端口',
     script_path: '/opt/core-service/scripts/restart_xbridge.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xbridge']),
     risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
-    trigger_faults: JSON.stringify(['port_8789_down']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789] }), fallback_action_key: 'install_xnftables', priority: 10, metadata: JSON.stringify({})
+    trigger_faults: JSON.stringify(['port_8789_down']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789] }), fallback_action_key: 'update_xbridge', priority: 10, metadata: JSON.stringify({})
   },
   {
     action_key: 'restart_redis', name: '重启 redis', display_name: '重启 redis', category: 'safe', description: '重启 redis 服务并校验 6379 端口',
@@ -78,25 +78,76 @@ const DEFAULT_ACTION_DEFINITIONS = [
     risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
     trigger_faults: JSON.stringify(['port_6379_down']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'install_redis', priority: 10, metadata: JSON.stringify({})
   },
+  // === 新增：全量安装 ===
   {
-    action_key: 'update_xcore', name: '更新 xcore 内核', display_name: '更新 xcore 内核', category: 'update', description: '增量更新 xcore 内核并重启 xagent 服务',
-    script_path: '/opt/core-service/scripts/update_xcore.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
-    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: 'install_ixvpn', priority: 20, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xcore/stable/current/xcore.zip`, restart_service: 'xagent.service' })
+    action_key: 'all_install', name: '全量安装', display_name: '全量安装', category: 'install',
+    description: '全量安装 xagent + xray + singbox + xassets + xbridge',
+    script_path: '/opt/core-service/scripts/all_install.sh',
+    param_schema: JSON.stringify({ required: ['server_id', 'server_ip'], properties: { server_id: { type: 'string', maxLength: 128 }, server_ip: { type: 'string', format: 'ipv4' } } }),
+    role_scope: JSON.stringify(['admin']), risk_level: 'critical', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent', 'xvpn-bridge-server'], ports_up: [8888, 8789] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({})
+  },
+  // === 新增：5个独立更新脚本 ===
+  {
+    action_key: 'update_xagent', name: '更新 xagent', display_name: '更新 xagent', category: 'update',
+    description: '版本号对比更新 xagent 并重启服务',
+    script_path: '/opt/core-service/scripts/update_xagent.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
+    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_8888_down']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 15, metadata: JSON.stringify({})
   },
   {
-    action_key: 'install_ixvpn', name: '安装 xagent', display_name: '安装 xagent', category: 'install', description: '安装/重建 xagent，并由 xagent 自动拉起 xcore 内核',
+    action_key: 'update_xbridge', name: '更新 xbridge', display_name: '更新 xbridge', category: 'update',
+    description: '版本号对比更新 xbridge 并重启服务',
+    script_path: '/opt/core-service/scripts/update_xbridge.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xbridge']),
+    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_8789_down']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 15, metadata: JSON.stringify({})
+  },
+  {
+    action_key: 'update_xray', name: '更新 xray', display_name: '更新 xray', category: 'update',
+    description: '版本号对比更新 xray 并重启 xagent',
+    script_path: '/opt/core-service/scripts/update_xray.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
+    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: '', priority: 20, metadata: JSON.stringify({})
+  },
+  {
+    action_key: 'update_singbox', name: '更新 singbox', display_name: '更新 singbox', category: 'update',
+    description: '版本号对比更新 singbox 并重启 xagent',
+    script_path: '/opt/core-service/scripts/update_singbox.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
+    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: '', priority: 20, metadata: JSON.stringify({})
+  },
+  {
+    action_key: 'update_xassets', name: '更新 xassets', display_name: '更新 xassets', category: 'update',
+    description: '版本号对比更新 xassets (geoip/geosite) 并重启 xagent',
+    script_path: '/opt/core-service/scripts/update_xassets.sh',
+    param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
+    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
+    trigger_faults: JSON.stringify(['port_443_down']), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: '', priority: 20, metadata: JSON.stringify({})
+  },
+  // === 旧动作保留兼容（降低优先级） ===
+  {
+    action_key: 'update_xcore', name: '更新 xcore 内核(旧)', display_name: '更新 xcore 内核(旧)', category: 'update', description: '(旧) 增量更新 xcore 内核并重启 xagent 服务',
+    script_path: '/opt/core-service/scripts/update_xcore.sh', param_schema: JSON.stringify({ required: [], properties: {} }), role_scope: JSON.stringify(['xagent']),
+    risk_level: 'guarded', timeout_seconds: 300, executor_type: 'agent', cooldown_seconds: 3600, max_retries: 1, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
+    trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({ ports_up: [443] }), fallback_action_key: '', priority: 200, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xcore/stable/current/xcore.zip`, restart_service: 'xagent.service' })
+  },
+  {
+    action_key: 'install_ixvpn', name: '安装 xagent(旧)', display_name: '安装 xagent(旧)', category: 'install', description: '(旧) 安装/重建 xagent，并由 xagent 自动拉起 xcore 内核',
     script_path: '/opt/core-service/scripts/install_ixvpn.sh',
     param_schema: JSON.stringify({ required: ['server_id', 'xagent_download_url', 'server_ip'], properties: { server_id: { type: 'string', maxLength: 128 }, xagent_download_url: { type: 'string', format: 'url' }, server_ip: { type: 'string', format: 'ipv4' } } }),
     role_scope: JSON.stringify(['xagent']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8888_down', 'port_443_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xagent/stable/current/xagent-server.zip` })
+    trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({ services_active: ['xagent'], ports_up: [8888] }), fallback_action_key: '', priority: 200, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xagent/stable/current/xagent-server.zip` })
   },
   {
-    action_key: 'install_xnftables', name: '安装 xnftables', display_name: '安装 xnftables', category: 'install', description: '安装/重建 xvpn-bridge-server',
+    action_key: 'install_xnftables', name: '安装 xnftables(旧)', display_name: '安装 xnftables(旧)', category: 'install', description: '(旧) 安装/重建 xvpn-bridge-server',
     script_path: '/opt/core-service/scripts/install_xnftables.sh',
     param_schema: JSON.stringify({ required: ['server_id', 'download_url'], properties: { server_id: { type: 'string', maxLength: 128 }, download_url: { type: 'string', format: 'url' } } }),
     role_scope: JSON.stringify(['xbridge']), risk_level: 'guarded', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 7200, max_retries: 0, auto_enabled: 0, requires_approval: 1, batch_enabled: 0,
-    trigger_faults: JSON.stringify(['port_8789_down', 'component_missing']), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 100, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xbridge/stable/current/xbridge-server.zip` })
+    trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({ services_active: ['xvpn-bridge-server'], ports_up: [8789, 8610] }), fallback_action_key: '', priority: 200, metadata: JSON.stringify({ download_url: `${DOWNLOAD_BASE_URL}/packages/xbridge/stable/current/xbridge-server.zip` })
   },
   {
     action_key: 'install_redis', name: '安装 redis', display_name: '安装 redis', category: 'install', description: '在线安装 redis 并校验 6379 端口',
@@ -116,7 +167,7 @@ const DEFAULT_ACTION_DEFINITIONS = [
     script_path: '/opt/core-service/scripts/init_ops_scripts.sh',
     param_schema: JSON.stringify({ required: ['ops_scripts_url'], properties: { ops_scripts_url: { type: 'string', format: 'url' } } }),
     role_scope: JSON.stringify(['xagent', 'xbridge', 'redis']), risk_level: 'safe', timeout_seconds: 600, executor_type: 'agent', cooldown_seconds: 600, max_retries: 1, auto_enabled: 0, requires_approval: 0, batch_enabled: 1,
-    trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/opt/core-service/scripts/restart_xagent.sh', '/opt/core-service/scripts/update_xcore.sh'] }), fallback_action_key: '', priority: 5, metadata: JSON.stringify({ ops_scripts_url: `${DOWNLOAD_BASE_URL}/packages/ops/stable/current/ops-scripts.zip` })
+    trigger_faults: JSON.stringify(['component_missing']), success_criteria: JSON.stringify({ files_exist_any: ['/opt/core-service/scripts/restart_xagent.sh', '/opt/core-service/scripts/update_xagent.sh'] }), fallback_action_key: '', priority: 5, metadata: JSON.stringify({ ops_scripts_url: `${DOWNLOAD_BASE_URL}/packages/ops/stable/current/ops-scripts.zip` })
   },
   {
     action_key: 'upgrade_agent', name: '升级 Agent', display_name: '升级 Agent', category: 'maintenance', description: '下载最新 agent 二进制并重启',
@@ -201,6 +252,9 @@ fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'agents'), { recursive: true }
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xagent'), { recursive: true });
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xbridge'), { recursive: true });
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xcore'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xray'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'singbox'), { recursive: true });
+fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'xassets'), { recursive: true });
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'packages', 'redis'), { recursive: true });
 const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN || '';
 function authMiddleware(req, res, next) { if (!DASHBOARD_TOKEN) return next(); const auth = req.headers.authorization || ''; const cookie = req.headers.cookie || ''; const tokenFromHeader = auth.startsWith('Bearer ') ? auth.slice(7) : ''; const tokenFromCookie = (cookie.match(/dashboard_token=([^;]+)/) || [])[1] || ''; const tokenFromQuery = req.query?.token || ''; if (tokenFromHeader === DASHBOARD_TOKEN || tokenFromCookie === DASHBOARD_TOKEN || tokenFromQuery === DASHBOARD_TOKEN) return next(); return res.status(401).json({ error: 'unauthorized' }); }
@@ -215,7 +269,7 @@ function genTaskId() { return `task_${Date.now()}_${crypto.randomBytes(4).toStri
 function genLeaseToken() { return `lease_${crypto.randomBytes(12).toString('hex')}`; }
 function faultSeverity(faultType) { if (faultType === 'server_offline') return 'critical'; return 'warning'; }
 function faultTitle(serverId, faultType) { const map = { port_443_down: '内核端口 443 异常', port_6379_down: 'Redis 端口 6379 异常', port_8888_down: 'XAgent 端口 8888 异常', port_8789_down: 'XBridge 端口 8789 异常', server_offline: '节点离线' }; return `${serverId} · ${map[faultType] || faultType}`; }
-function suggestAction(faultType) { const map = { port_443_down: 'update_xcore', port_6379_down: 'restart_redis', port_8888_down: 'restart_xagent', port_8789_down: 'restart_xbridge', server_offline: '' }; return map[faultType] || ''; }
+function suggestAction(faultType) { const map = { port_443_down: 'update_xray', port_6379_down: 'restart_redis', port_8888_down: 'restart_xagent', port_8789_down: 'restart_xbridge', server_offline: '' }; return map[faultType] || ''; }
 function upsertIncidentsForServer(serverId, serverStatus, issues, metadata = {}) {
   const activeFaults = new Set();
   for (const issue of issues || []) {
@@ -332,11 +386,14 @@ app.get('/api/incidents/export', authMiddleware, (req, res) => {
 });
 app.get('/api/packages/checksums', authMiddleware, (req, res) => {
   try {
-    const xray = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'xcore.zip');
+    const xcoreZip = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'xcore.zip');
     const result = {
-      xcore_zip: fs.existsSync(xray) ? { md5: fileMd5(xray), sha256: fileSha256(xray) } : null,
+      xcore_zip: fs.existsSync(xcoreZip) ? { md5: fileMd5(xcoreZip), sha256: fileSha256(xcoreZip) } : null,
       xagent_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'xagent', 'xagent-server.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
       xbridge_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'xbridge', 'xbridge-server.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
+      xray_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'xray', 'xray-server.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
+      singbox_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'singbox', 'singbox-server.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
+      xassets_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'xassets', 'xassets.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
       redis_script: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'redis', 'install_redis.sh'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
       ops_scripts_zip: (() => { const p = path.join(DOWNLOAD_ROOT, 'packages', 'ops', 'ops-scripts.zip'); return fs.existsSync(p) ? { md5: fileMd5(p), sha256: fileSha256(p) } : null; })(),
     };
@@ -360,14 +417,20 @@ function computeExpectedMd5s() {
   const stableXagent = path.join(DOWNLOAD_ROOT, 'packages', 'xagent', 'stable', 'current', 'xagent-server.zip');
   const stableXbridge = path.join(DOWNLOAD_ROOT, 'packages', 'xbridge', 'stable', 'current', 'xbridge-server.zip');
   const stableXcore = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'stable', 'current', 'xcore.zip');
+  const stableXray = path.join(DOWNLOAD_ROOT, 'packages', 'xray', 'stable', 'current', 'xray-server.zip');
+  const stableSingbox = path.join(DOWNLOAD_ROOT, 'packages', 'singbox', 'stable', 'current', 'singbox-server.zip');
   const result = {
     xagent_md5: fs.existsSync(stableXagent) ? zipEntryMd5(stableXagent, 'xagent-server/xagent') : '',
     xbridge_md5: fs.existsSync(stableXbridge) ? zipEntryMd5(stableXbridge, 'xbrigde-server/xvpn-bridge-server') : '',
-    xray_md5: fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/xray') : '',
-    singbox_md5: fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/singbox') : '',
+    // Try new split packages first, fall back to legacy xcore.zip
+    xray_md5: fs.existsSync(stableXray) ? zipEntryMd5(stableXray, 'xray-server/xray') : (fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/xray') : ''),
+    singbox_md5: fs.existsSync(stableSingbox) ? zipEntryMd5(stableSingbox, 'singbox-server/singbox') : (fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/singbox') : ''),
     xagent_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xagent', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
     xbridge_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xbridge', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
     xcore_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
+    xray_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xray', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
+    singbox_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'singbox', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
+    xassets_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xassets', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
   };
   _expectedMd5Cache = { data: result, ts: now };
   return result;
@@ -377,7 +440,7 @@ app.get('/api/packages/expected-checksums', authMiddleware, (req, res) => {
 });
 app.get('/api/packages/catalog', authMiddleware, (req, res) => {
   try {
-    const names = ['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'];
+    const names = ['agents', 'xagent', 'xbridge', 'xcore', 'xray', 'singbox', 'xassets', 'redis', 'ops'];
     const catalog = names.map((name) => {
       const stable = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable', 'current');
       let stableTarget = '';
@@ -406,7 +469,7 @@ app.post('/api/packages/:name/stable', authMiddleware, (req, res) => {
   try {
     const name = String(req.params.name || '').trim();
     const release = String(req.body?.release || '').trim();
-    if (!['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'].includes(name)) return res.status(400).json({ error: 'invalid package name' });
+    if (!['agents', 'xagent', 'xbridge', 'xcore', 'xray', 'singbox', 'xassets', 'redis', 'ops'].includes(name)) return res.status(400).json({ error: 'invalid package name' });
     if (!release) return res.status(400).json({ error: 'release required' });
     switchStableRelease(name, release);
     return res.json({ ok: true, name, stable: release });
@@ -417,7 +480,7 @@ app.post('/api/packages/:name/stable', authMiddleware, (req, res) => {
 app.post('/api/packages/:name/rollback', authMiddleware, (req, res) => {
   try {
     const name = String(req.params.name || '').trim();
-    if (!['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'].includes(name)) return res.status(400).json({ error: 'invalid package name' });
+    if (!['agents', 'xagent', 'xbridge', 'xcore', 'xray', 'singbox', 'xassets', 'redis', 'ops'].includes(name)) return res.status(400).json({ error: 'invalid package name' });
     const releasesDir = path.join(DOWNLOAD_ROOT, 'packages', name, 'releases');
     const releases = fs.existsSync(releasesDir) ? fs.readdirSync(releasesDir).sort().reverse() : [];
     const stable = path.join(DOWNLOAD_ROOT, 'packages', name, 'stable', 'current');
@@ -475,7 +538,7 @@ app.post('/api/uploads/packages', authMiddleware, (req, res) => {
         }
       }
       if (!fileName || !fileBuffer) return res.status(400).json({ error: 'file missing' });
-      if (!['packages/agents','packages/xagent','packages/xbridge','packages/xcore','packages/redis','packages/ops'].includes(folder)) folder = 'packages/xagent';
+      if (!['packages/agents','packages/xagent','packages/xbridge','packages/xcore','packages/xray','packages/singbox','packages/xassets','packages/redis','packages/ops'].includes(folder)) folder = 'packages/xagent';
       if (!release) release = new Date().toISOString().slice(0, 10).replace(/-/g, '.') + '-auto';
       const pkgName = folder.replace(/^packages\//, '');
       const releasesDir = path.join(DOWNLOAD_ROOT, folder, 'releases', release);

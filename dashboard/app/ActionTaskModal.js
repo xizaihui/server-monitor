@@ -50,6 +50,12 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
   }, [open, singleServer, targetServers, currentDef, actionKey]);
 
   const fields = useMemo(() => {
+    if (actionKey === 'all_install') {
+      return [
+        { key: 'server_id', label: '业务 server_id', placeholder: '例如 1018' },
+        { key: 'server_ip', label: '服务器 IP', placeholder: '例如 1.2.3.4' },
+      ];
+    }
     if (actionKey === 'install_ixvpn') {
       return [
         { key: 'server_id', label: isBulk ? '业务 server_id（批量默认值，可按需统一下发）' : '业务 server_id', placeholder: '例如 1018' },
@@ -78,6 +84,7 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
         { key: 'download_base', label: '下载服务器地址', placeholder: 'http://43.165.172.3/downloads' },
       ];
     }
+    // update_xagent, update_xbridge, update_xray, update_singbox, update_xassets 等无参数
     return [];
   }, [actionKey, isBulk]);
 
@@ -88,6 +95,9 @@ export default function ActionTaskModal({ open, server, servers, initialActionKe
   }
 
   function buildParams() {
+    if (actionKey === 'all_install') {
+      return { server_id: form.server_id, server_ip: form.server_ip };
+    }
     if (actionKey === 'install_ixvpn') {
       return { server_id: form.server_id, xagent_download_url: form.xagent_download_url, server_ip: form.server_ip };
     }
