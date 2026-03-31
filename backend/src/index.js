@@ -345,6 +345,36 @@ app.get('/api/packages/checksums', authMiddleware, (req, res) => {
     res.status(500).json({ error: error.message || 'checksum failed' });
   }
 });
+
+// Expected binary MD5s from stable packages — used by frontend to compare with agent-reported checksums
+let _expectedMd5Cache = { data: null, ts: 0 };
+function zipEntryMd5(zipPath, entryPath) {
+  try {
+    const buf = execFileSync('unzip', ['-p', zipPath, entryPath], { maxBuffer: 200 * 1024 * 1024, timeout: 30000 });
+    const hash = crypto.createHash('md5'); hash.update(buf); return hash.digest('hex');
+  } catch { return ''; }
+}
+function computeExpectedMd5s() {
+  const now = Date.now();
+  if (_expectedMd5Cache.data && now - _expectedMd5Cache.ts < 60000) return _expectedMd5Cache.data;
+  const stableXagent = path.join(DOWNLOAD_ROOT, 'packages', 'xagent', 'stable', 'current', 'xagent-server.zip');
+  const stableXbridge = path.join(DOWNLOAD_ROOT, 'packages', 'xbridge', 'stable', 'current', 'xbridge-server.zip');
+  const stableXcore = path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'stable', 'current', 'xcore.zip');
+  const result = {
+    xagent_md5: fs.existsSync(stableXagent) ? zipEntryMd5(stableXagent, 'xagent-server/xagent') : '',
+    xbridge_md5: fs.existsSync(stableXbridge) ? zipEntryMd5(stableXbridge, 'xbrigde-server/xvpn-bridge-server') : '',
+    xray_md5: fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/xray') : '',
+    singbox_md5: fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/singbox') : '',
+    xagent_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xagent', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
+    xbridge_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xbridge', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
+    xcore_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
+  };
+  _expectedMd5Cache = { data: result, ts: now };
+  return result;
+}
+app.get('/api/packages/expected-checksums', authMiddleware, (req, res) => {
+  try { res.json(computeExpectedMd5s()); } catch (error) { res.status(500).json({ error: error.message }); }
+});
 app.get('/api/packages/catalog', authMiddleware, (req, res) => {
   try {
     const names = ['agents', 'xagent', 'xbridge', 'xcore', 'redis', 'ops'];

@@ -4,6 +4,7 @@ import (
     "bufio"
     "bytes"
     "context"
+    "crypto/md5"
     "crypto/sha1"
     "encoding/hex"
     "encoding/json"
@@ -557,7 +558,13 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
         diag = collectDiagnostics(cpuUsage > 80, memUsage > 85, diskUsage > 55)
     }
 
-    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.8.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion}, Diagnostics: diag}, nil
+    // Collect component checksums for version tracking
+    xagentMd5 := fileMd5Sum("/opt/core-service/xagent-server/xagent")
+    xbridgeMd5 := fileMd5Sum("/opt/core-service/xbrigde-server/xvpn-bridge-server")
+    xrayMd5 := fileMd5Sum("/opt/core-service/xcore/xray")
+    singboxMd5 := fileMd5Sum("/opt/core-service/xcore/singbox")
+
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.8.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion, "xagent_md5": xagentMd5, "xbridge_md5": xbridgeMd5, "xray_md5": xrayMd5, "singbox_md5": singboxMd5}, Diagnostics: diag}, nil
 }
 
 func collectDiagnostics(cpuAlert, memAlert, diskAlert bool) *Diagnostics {
@@ -751,3 +758,4 @@ func percent(used, total uint64) float64 { if total == 0 { return 0 }; return (f
 func getEnv(key, fallbackVal string) string { val := strings.TrimSpace(os.Getenv(key)); if val == "" { return fallbackVal }; return val }
 func getEnvInt(key string, fallbackVal int) int { raw := strings.TrimSpace(os.Getenv(key)); if raw == "" { return fallbackVal }; val, err := strconv.Atoi(raw); if err != nil { return fallbackVal }; return val }
 func fallback(v, d string) string { if strings.TrimSpace(v) == "" { return d }; return v }
+func fileMd5Sum(filePath string) string { f, err := os.Open(filePath); if err != nil { return "" }; defer f.Close(); h := md5.New(); if _, err := io.Copy(h, f); err != nil { return "" }; return hex.EncodeToString(h.Sum(nil)) }

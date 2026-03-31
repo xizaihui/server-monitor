@@ -21,6 +21,13 @@ function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
+function componentBadge(md5Reported, md5Expected, label) {
+  if (!md5Reported) return { text: '未安装', tone: 'offline', outdated: false };
+  if (!md5Expected) return { text: '已安装', tone: 'healthy', outdated: false };
+  if (md5Reported === md5Expected) return { text: '最新', tone: 'healthy', outdated: false };
+  return { text: '需更新', tone: 'problem', outdated: true };
+}
+
 function MetricBar({ value, alert = false, offline = false }) {
   if (offline) {
     return (
@@ -73,10 +80,18 @@ function targetGap(server) {
   return '已对齐目标';
 }
 
-function readinessFilter(status, server) {
+function readinessFilter(status, server, expectedChecksums) {
   const rb = readinessBadge(server);
   if (status === 'scripts_missing') return rb.rank === 0;
   if (status === 'scripts_outdated') return rb.rank === 1;
+  if (status === 'component_outdated') {
+    const m = server?.metadata || {};
+    const ec = expectedChecksums || {};
+    return (m.xagent_md5 && ec.xagent_md5 && m.xagent_md5 !== ec.xagent_md5)
+      || (m.xbridge_md5 && ec.xbridge_md5 && m.xbridge_md5 !== ec.xbridge_md5)
+      || (m.xray_md5 && ec.xray_md5 && m.xray_md5 !== ec.xray_md5)
+      || (m.singbox_md5 && ec.singbox_md5 && m.singbox_md5 !== ec.singbox_md5);
+  }
   return server.status === status;
 }
 
@@ -122,6 +137,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [incidentHistoryOpen, setIncidentHistoryOpen] = useState(false);
   const [packageRepoRefreshKey, setPackageRepoRefreshKey] = useState(0);
+  const [expectedChecksums, setExpectedChecksums] = useState(null);
   const [rules, setRules] = useState(initialRules);
   const [toast, setToast] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -273,6 +289,18 @@ export default function DashboardClient({ servers: initialServers, groups, selec
     return () => clearInterval(timer);
   }, [selectedGroup]);
 
+  useEffect(() => {
+    async function fetchExpected() {
+      try {
+        const res = await fetch('/api/proxy/packages/expected-checksums', { cache: 'no-store' });
+        if (res.ok) setExpectedChecksums(await res.json());
+      } catch {}
+    }
+    fetchExpected();
+    const timer = setInterval(fetchExpected, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const stats = useMemo(() => ({
     total: servers.length,
     healthy: servers.filter((s) => s.status === 'healthy').length,
@@ -281,13 +309,13 @@ export default function DashboardClient({ servers: initialServers, groups, selec
   }), [servers]);
 
   const filtered = useMemo(() => servers.filter((s) => {
-    const matchesStatus = status === 'ALL' ? true : readinessFilter(status, s);
+    const matchesStatus = status === 'ALL' ? true : readinessFilter(status, s, expectedChecksums);
     const q = query.trim().toLowerCase();
     const matchesQuery = !q ? true : [s.ip, s.instance_id, s.display_name, s.hostname, s.group_name, s.server_id, s.metadata?.agent_version, s.metadata?.ops_scripts_version]
       .filter(Boolean)
       .some((v) => String(v).toLowerCase().includes(q));
     return matchesStatus && matchesQuery;
-  }), [servers, query, status]);
+  }), [servers, query, status, expectedChecksums]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -383,7 +411,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         <div className="toolbarGroup">
           <input className="input searchInput compactInput" placeholder="搜索 IP / server-id / 节点名 / 分类 / ID / 版本" value={query} onChange={(e) => onChangeQuery(e.target.value)} />
           <div className="segmented compactSegmented">
-            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康'], ['scripts_missing', '脚本未初始化'], ['scripts_outdated', '脚本需更新']].map(([value, label]) => (
+            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康'], ['scripts_missing', '脚本未初始化'], ['scripts_outdated', '脚本需更新'], ['component_outdated', '组件需更新']].map(([value, label]) => (
               <button key={value} type="button" className={`segment compactSegment ${status === value ? 'active' : ''}`} onClick={() => onChangeStatus(value)}>{label}</button>
             ))}
           </div>
@@ -427,6 +455,9 @@ export default function DashboardClient({ servers: initialServers, groups, selec
             {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
           <span>脚本目标版本 {CURRENT_OPS_VERSION}</span>
+          {expectedChecksums?.xagent_version ? <span>xagent {expectedChecksums.xagent_version}</span> : null}
+          {expectedChecksums?.xcore_version ? <span>xcore {expectedChecksums.xcore_version}</span> : null}
+          {expectedChecksums?.xbridge_version ? <span>xbridge {expectedChecksums.xbridge_version}</span> : null}
           <span>共 {filtered.length} 台</span>
         </div>
       </section>
@@ -478,6 +509,12 @@ export default function DashboardClient({ servers: initialServers, groups, selec
               {paged.map((s) => {
                 const sb = scriptsBadge(s);
                 const rb = readinessBadge(s);
+                const m = s.metadata || {};
+                const ec = expectedChecksums || {};
+                const xagentBadge = componentBadge(m.xagent_md5, ec.xagent_md5, 'xagent');
+                const xbridgeBadge = componentBadge(m.xbridge_md5, ec.xbridge_md5, 'xbridge');
+                const xrayBadge = componentBadge(m.xray_md5, ec.xray_md5, 'xray');
+                const singboxBadge = componentBadge(m.singbox_md5, ec.singbox_md5, 'singbox');
                 return (
                 <tr key={s.server_id} className={`${s.status === 'problem' ? 'problemRow' : s.status === 'offline' ? 'offlineRow' : ''} compactRow`}>
                   <td className="stickyCol stickyBodyCol checkboxCol"><input type="checkbox" checked={selectedIds.includes(s.server_id)} onChange={() => toggleOne(s.server_id)} /></td>
@@ -488,7 +525,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       </button>
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
-                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span></div>
+                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span>{singboxBadge.outdated ? <span className="inlineReadiness problem"> · singbox需更新</span> : null}</div>
                     <div className="small versionSubline">{targetGap(s)}</div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
@@ -502,10 +539,10 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                   <td><MetricBar value={s.cpu_usage} alert={hasIssue(s, 'CPU')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.memory_usage} alert={hasIssue(s, '内存')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.disk_usage} alert={hasIssue(s, '磁盘')} offline={s.status === 'offline'} /></td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>{xrayBadge.outdated ? <div className="compVerBadge problem">需更新</div> : null}</>}</td>
                   <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_6379 ? 'up' : 'down'}`}>{s.port_6379 ? 'UP' : 'DOWN'}</span>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>{xagentBadge.outdated ? <div className="compVerBadge problem">需更新</div> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>{xbridgeBadge.outdated ? <div className="compVerBadge problem">需更新</div> : null}</>}</td>
                   <td>
                     <ServerActions server={s} compact onEdit={setEditServer} onDelete={setDeleteServer} onTaskHistory={setTaskHistoryServer} />
                   </td>
