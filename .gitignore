@@ -19,3 +19,5 @@ agent/*.env
 .DS_Store
 
 agent/server-monitor-agent
+agent/server-monitor-agent.bak
+agent/.upgrade.tmp
