@@ -334,9 +334,9 @@ func executeTask(serverID string, task ActionTask) TaskResult {
         case strings.Contains(lowerLogs, "port 8888 not listening"):
             resultCode = "port_not_ready"
             resultSummary = "xagent 端口 8888 未就绪"
-        case strings.Contains(lowerLogs, "port 8789 not listening"):
+        case strings.Contains(lowerLogs, "port 8610 not listening"):
             resultCode = "port_not_ready"
-            resultSummary = "xbridge 端口 8789 未就绪"
+            resultSummary = "xbridge 端口 8610 未就绪"
         case strings.Contains(lowerLogs, "failed to start xagent.service"):
             resultCode = "service_start_failed"
             resultSummary = "xagent 服务启动失败"
@@ -562,7 +562,7 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     if err != nil { return nil, err }
     diskUsage := percent(diskUsed, diskTotal)
     ports := map[string]bool{}
-    for _, p := range []string{"443", "6379", "8888", "8789"} { ports[p] = checkPort("127.0.0.1:" + p) }
+    for _, p := range []string{"443", "6379", "8888", "8610"} { ports[p] = checkPort("127.0.0.1:" + p) }
 
     // Collect diagnostics when thresholds exceeded
     var diag *Diagnostics
