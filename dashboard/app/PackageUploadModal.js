@@ -58,12 +58,14 @@ export default function PackageUploadModal({ open, onClose, onUploaded }) {
         <div className="modalBody">
           <label className="fieldLabel">上传目录</label>
           <select className="select fullInput" value={folder} onChange={(e) => setFolder(e.target.value)}>
-            <option value="packages/agents">agents</option>
+            <option value="packages/agents">agents (监控 agent)</option>
             <option value="packages/xagent">xagent</option>
             <option value="packages/xbridge">xbridge</option>
-            <option value="packages/xcore">xcore</option>
+            <option value="packages/xray">xray</option>
+            <option value="packages/singbox">singbox</option>
+            <option value="packages/xassets">xassets (geoip/geosite)</option>
             <option value="packages/redis">redis</option>
-            <option value="packages/ops">ops</option>
+            <option value="packages/ops">ops (运维脚本)</option>
           </select>
 
           <label className="fieldLabel">release 名称（可选）</label>
