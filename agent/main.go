@@ -493,6 +493,8 @@ func executeUpgradeAgent(serverID string, task ActionTask) TaskResult {
     upgradeScript := fmt.Sprintf(
         `sleep 2; [ -f '%s' ] && cp '%s' '%s.bak'; systemctl stop server-monitor-agent 2>/dev/null || true; sleep 1; rm -f '%s'; mv '%s' '%s'; chmod 755 '%s'; systemctl start server-monitor-agent`,
         binPath, binPath, binPath, binPath, tmpPath, binPath, binPath)
+    // Reset stale transient unit from previous upgrade
+    _ = osExec.Command("systemctl", "reset-failed", "sm-agent-upgrade.service").Run()
     cmd := osExec.Command("systemd-run", "--unit=sm-agent-upgrade", "--description=Monitor Agent Upgrade", "bash", "-c", upgradeScript)
     if out, err := cmd.CombinedOutput(); err != nil {
         logf("systemd-run failed: %v %s — trying setsid fallback", err, strings.TrimSpace(string(out)))
