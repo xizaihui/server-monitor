@@ -552,6 +552,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                 <th className="highContrastHead">CPU</th>
                 <th className="highContrastHead">内存</th>
                 <th className="highContrastHead">磁盘</th>
+                <th className="portHead highContrastHead">singbox</th>
                 <th className="portHead highContrastHead">xray</th>
                 <th className="portHead highContrastHead">redis</th>
                 <th className="portHead highContrastHead">xagent</th>
@@ -593,16 +594,17 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                   <td><MetricBar value={s.cpu_usage} alert={hasIssue(s, 'CPU')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.memory_usage} alert={hasIssue(s, '内存')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.disk_usage} alert={hasIssue(s, '磁盘')} offline={s.status === 'offline'} /></td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>{xrayBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xray', '更新xray')}>需更新</button> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <>{singboxBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_singbox', '更新singbox')}>更新</button> : <span className={`compVerBadge ${singboxBadge.tone}`}>{singboxBadge.text}</span>}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>{xrayBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xray', '更新xray')}>更新</button> : null}</>}</td>
                   <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_6379 ? 'up' : 'down'}`}>{s.port_6379 ? 'UP' : 'DOWN'}</span>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>{xagentBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xagent', '更新xagent')}>需更新</button> : null}</>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>{xbridgeBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xbridge', '更新xbridge')}>需更新</button> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>{xagentBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xagent', '更新xagent')}>更新</button> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8789 ? 'up' : 'down'}`}>{s.port_8789 ? 'UP' : 'DOWN'}</span>{xbridgeBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xbridge', '更新xbridge')}>更新</button> : null}</>}</td>
                   <td>
                     <ServerActions server={s} compact onEdit={setEditServer} onDelete={setDeleteServer} onTaskHistory={setTaskHistoryServer} />
                   </td>
                 </tr>
               )})}
-              {paged.length === 0 ? <tr><td colSpan="13" className="emptyStateCell">当前筛选下暂无节点</td></tr> : null}
+              {paged.length === 0 ? <tr><td colSpan="14" className="emptyStateCell">当前筛选下暂无节点</td></tr> : null}
             </tbody>
           </table>
         </div>

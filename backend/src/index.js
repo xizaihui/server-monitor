@@ -420,11 +420,11 @@ function computeExpectedMd5s() {
   const stableXray = path.join(DOWNLOAD_ROOT, 'packages', 'xray', 'stable', 'current', 'xray-server.zip');
   const stableSingbox = path.join(DOWNLOAD_ROOT, 'packages', 'singbox', 'stable', 'current', 'singbox-server.zip');
   const result = {
-    xagent_md5: fs.existsSync(stableXagent) ? zipEntryMd5(stableXagent, 'xagent-server/xagent') : '',
-    xbridge_md5: fs.existsSync(stableXbridge) ? zipEntryMd5(stableXbridge, 'xbrigde-server/xvpn-bridge-server') : '',
+    xagent_md5: fs.existsSync(stableXagent) ? (zipEntryMd5(stableXagent, 'xagent-server/xagent') || zipEntryMd5(stableXagent, 'xagent')) : '',
+    xbridge_md5: fs.existsSync(stableXbridge) ? (zipEntryMd5(stableXbridge, 'xbrigde-server/xvpn-bridge-server') || zipEntryMd5(stableXbridge, 'xvpn-bridge-server')) : '',
     // Try new split packages first, fall back to legacy xcore.zip
-    xray_md5: fs.existsSync(stableXray) ? zipEntryMd5(stableXray, 'xray-server/xray') : (fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/xray') : ''),
-    singbox_md5: fs.existsSync(stableSingbox) ? zipEntryMd5(stableSingbox, 'singbox-server/singbox') : (fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/singbox') : ''),
+    xray_md5: fs.existsSync(stableXray) ? (zipEntryMd5(stableXray, 'xray-server/xray') || zipEntryMd5(stableXray, 'xray')) : (fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/xray') : ''),
+    singbox_md5: fs.existsSync(stableSingbox) ? (zipEntryMd5(stableSingbox, 'singbox-server/singbox') || zipEntryMd5(stableSingbox, 'singbox')) : (fs.existsSync(stableXcore) ? zipEntryMd5(stableXcore, 'xcore/singbox') : ''),
     xagent_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xagent', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
     xbridge_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xbridge', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
     xcore_version: (() => { try { return fs.readlinkSync(path.join(DOWNLOAD_ROOT, 'packages', 'xcore', 'stable', 'current')).replace(/^\.\.\/releases\//, ''); } catch { return ''; } })(),
