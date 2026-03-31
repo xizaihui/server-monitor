@@ -476,7 +476,7 @@ table {
   table-layout: fixed;
 }
 
-.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 700px; }
+.denseTable, .cleanerTable, .compactMainTable, .noTaskColTable { min-width: 960px; }
 
 thead th:nth-child(1) { width: 30px; }
 thead th:nth-child(2) { width: 110px; }
@@ -644,7 +644,7 @@ tr.offlineRow td:last-child { background: #f8f8f8; }
 }
 
 .metricCompactCell, .metricCellTight {
-  width: 68px;
+  width: 58px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -663,7 +663,7 @@ tr.offlineRow td:last-child { background: #f8f8f8; }
 }
 
 .barTrack, .barTrackAligned {
-  width: 48px;
+  width: 40px;
   height: 3px;
   background: #E4E4E7;
   border-radius: 999px;
@@ -1161,14 +1161,14 @@ tr, td, .metricCompactCell, .portSquare, .badge, .iconButton { transition: none 
   .searchInput { min-width: 200px; }
   .statsGrid { flex-direction: column; }
   .inlineCopyBtn { opacity: 1; }
-  table, .compactMainTable, .noTaskColTable { min-width: 920px; }
+  table, .compactMainTable, .noTaskColTable { min-width: 1020px; }
 }
 
 @media (max-width: 640px) {
   .page { padding: 0 12px; }
   .drawerPanel, .modalCard, .largeModal, .loginCard { width: 100%; }
   .toast { left: 10px; right: 10px; top: 10px; }
-  table, .compactMainTable, .noTaskColTable { min-width: 700px; }
+  table, .compactMainTable, .noTaskColTable { min-width: 800px; }
 }
 /* ── Clickable Badge (一键更新) ── */
 .clickableBadge {
