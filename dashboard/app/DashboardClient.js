@@ -15,7 +15,7 @@ import IncidentPanel from './IncidentPanel';
 import NotificationSettingsModal from './NotificationSettingsModal';
 import IncidentHistoryModal from './IncidentHistoryModal';
 
-const CURRENT_OPS_VERSION = '2026.03.31-3';
+const CURRENT_OPS_VERSION = '2026.03.31-4';
 
 function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
