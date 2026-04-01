@@ -22,7 +22,7 @@ import (
 )
 
 // AgentVersion is set at build time via -ldflags "-X main.AgentVersion=x.y.z"
-var AgentVersion = "1.12.0"
+var AgentVersion = "1.12.1"
 
 type Payload struct {
     ServerID     string            `json:"server_id"`

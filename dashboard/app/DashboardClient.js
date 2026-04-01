@@ -16,7 +16,7 @@ import NotificationSettingsModal from './NotificationSettingsModal';
 import IncidentHistoryModal from './IncidentHistoryModal';
 
 const CURRENT_OPS_VERSION = '2026.04.01-03';
-const CURRENT_AGENT_VERSION = '1.12.0';
+const CURRENT_AGENT_VERSION = '1.12.1';
 
 function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
