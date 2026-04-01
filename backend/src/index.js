@@ -616,6 +616,14 @@ app.post('/api/agent/register', (req, res) => {
   db.prepare(`UPDATE servers SET status = ?, issue_count = ?, updated_at = ? WHERE server_id = ?`).run(derived.status, derived.issue_count, now, serverId);
   db.prepare(`UPDATE metrics SET issues = ? WHERE id = (SELECT id FROM metrics WHERE server_id = ? ORDER BY id DESC LIMIT 1)`).run(JSON.stringify(derived.issues), serverId);
   upsertIncidentsForServer(serverId, derived.status, derived.issues, { ip: body.ip || '', hostname: body.hostname || '', instance_id: body.instance_id || '' });
+
+  // Auto-resolve stuck upgrade_agent tasks: if agent is heartbeating, the upgrade succeeded
+  // (the old agent was killed by restart before it could report the result)
+  const stuckUpgrade = db.prepare(`SELECT task_id FROM action_tasks WHERE server_id = ? AND action_key = 'upgrade_agent' AND status IN ('running', 'leased') LIMIT 1`).get(serverId);
+  if (stuckUpgrade) {
+    db.prepare(`UPDATE action_tasks SET status = 'success', result_code = 'ok', result_summary = 'Agent升级成功(心跳自动确认)', finished_at = ?, lease_token = '', lease_expires_at = NULL WHERE task_id = ?`).run(now, stuckUpgrade.task_id);
+  }
+
   res.json({ ok: true, status: derived.status, issues: derived.issues, assigned_group: DEFAULT_GROUP });
 });
 app.post('/api/actions/tasks', authMiddleware, (req, res) => { const body = req.body || {}; const serverId = String(body.server_id || '').trim(); const actionKey = String(body.action_key || '').trim(); const params = body.params || {}; const source = String(body.source || 'dashboard'); const createdBy = String(body.created_by || 'dashboard'); if (!serverId || !actionKey) return res.status(400).json({ error: 'server_id and action_key required' }); const def = db.prepare(`SELECT * FROM action_definitions WHERE action_key = ? AND enabled = 1`).get(actionKey); if (!def) return res.status(404).json({ error: 'action definition not found' }); const activeTask = db.prepare(`SELECT task_id, status FROM action_tasks WHERE server_id = ? AND status IN ('pending', 'leased', 'running') ORDER BY created_at ASC LIMIT 1`).get(serverId); if (activeTask) return res.status(409).json({ error: 'server already has active task', activeTask }); const v = validateParams(def, params); if (!v.ok) return res.status(400).json({ error: v.error }); const taskId = genTaskId(); db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, '{}')`).run(taskId, serverId, actionKey, JSON.stringify(params), source, createdBy, Number(def.priority || 100), Number(def.timeout_seconds || 300)); return res.json({ ok: true, task: { task_id: taskId, status: 'pending' } }); });
