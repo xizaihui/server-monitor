@@ -21,6 +21,9 @@ import (
     "time"
 )
 
+// AgentVersion is set at build time via -ldflags "-X main.AgentVersion=x.y.z"
+var AgentVersion = "1.11.0"
+
 type Payload struct {
     ServerID     string            `json:"server_id"`
     Hostname     string            `json:"hostname"`
@@ -239,7 +242,7 @@ func taskLoop(apiBase string, serverID string) {
 func fetchNextTask(apiBase string, serverID string) (*ActionTask, error) {
     caps := make([]string, 0, len(actionRegistry))
     for key := range actionRegistry { caps = append(caps, key) }
-    body := map[string]interface{}{"server_id": serverID, "agent_version": "1.5.0", "capabilities": caps}
+    body := map[string]interface{}{"server_id": serverID, "agent_version": AgentVersion, "capabilities": caps}
     raw, _ := json.Marshal(body)
     req, err := http.NewRequest(http.MethodPost, apiBase+"/api/agent/tasks/next", bytes.NewReader(raw))
     if err != nil { return nil, err }
@@ -592,7 +595,7 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     xbridgeVersion := readVersionFile("/opt/core-service/xbrigde-server/VERSION")
     xassetsVersion := readVersionFile("/opt/core-service/xassets/VERSION")
 
-    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": "1.10.0", "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion, "xagent_md5": xagentMd5, "xbridge_md5": xbridgeMd5, "xray_md5": xrayMd5, "singbox_md5": singboxMd5, "xagent_version": xagentVersion, "xray_version": xrayVersion, "singbox_version": singboxVersion, "xbridge_version": xbridgeVersion, "xassets_version": xassetsVersion}, Diagnostics: diag}, nil
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": AgentVersion, "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion, "xagent_md5": xagentMd5, "xbridge_md5": xbridgeMd5, "xray_md5": xrayMd5, "singbox_md5": singboxMd5, "xagent_version": xagentVersion, "xray_version": xrayVersion, "singbox_version": singboxVersion, "xbridge_version": xbridgeVersion, "xassets_version": xassetsVersion}, Diagnostics: diag}, nil
 }
 
 func collectDiagnostics(cpuAlert, memAlert, diskAlert bool) *Diagnostics {
