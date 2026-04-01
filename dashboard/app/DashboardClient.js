@@ -16,6 +16,7 @@ import NotificationSettingsModal from './NotificationSettingsModal';
 import IncidentHistoryModal from './IncidentHistoryModal';
 
 const CURRENT_OPS_VERSION = '2026.04.01-01';
+const CURRENT_AGENT_VERSION = '1.11.0';
 
 function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -91,6 +92,10 @@ function readinessFilter(status, server, expectedChecksums) {
       || (m.xbridge_md5 && ec.xbridge_md5 && m.xbridge_md5 !== ec.xbridge_md5)
       || (m.xray_md5 && ec.xray_md5 && m.xray_md5 !== ec.xray_md5)
       || (m.singbox_md5 && ec.singbox_md5 && m.singbox_md5 !== ec.singbox_md5);
+  }
+  if (status === 'agent_outdated') {
+    const av = server?.metadata?.agent_version || '';
+    return av && av !== CURRENT_AGENT_VERSION;
   }
   return server.status === status;
 }
@@ -462,7 +467,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
         <div className="toolbarGroup">
           <input className="input searchInput compactInput" placeholder="搜索 IP / server-id / 节点名 / 分类 / ID / 版本" value={query} onChange={(e) => onChangeQuery(e.target.value)} />
           <div className="segmented compactSegmented">
-            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康'], ['scripts_missing', '脚本未初始化'], ['scripts_outdated', '脚本需更新'], ['component_outdated', '组件需更新']].map(([value, label]) => (
+            {[['ALL', '全部'], ['problem', '异常'], ['offline', '离线'], ['healthy', '健康'], ['scripts_missing', '脚本未初始化'], ['scripts_outdated', '脚本需更新'], ['component_outdated', '组件需更新'], ['agent_outdated', 'Agent需更新']].map(([value, label]) => (
               <button key={value} type="button" className={`segment compactSegment ${status === value ? 'active' : ''}`} onClick={() => onChangeStatus(value)}>{label}</button>
             ))}
           </div>
@@ -506,6 +511,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
             {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
           <span>脚本目标版本 {CURRENT_OPS_VERSION}</span>
+          <span>Agent目标 {CURRENT_AGENT_VERSION}</span>
           {expectedChecksums?.xagent_version ? <span>xagent {expectedChecksums.xagent_version}</span> : null}
           {expectedChecksums?.xcore_version ? <span>xcore {expectedChecksums.xcore_version}</span> : null}
           {expectedChecksums?.xray_version ? <span>xray {expectedChecksums.xray_version}</span> : null}
@@ -580,7 +586,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       </button>
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
-                    <div className="small versionSubline">agent {s.metadata?.agent_version || '-'} · {rb.rank < 2 ? <button type="button" className={`inlineReadiness ${rb.tone} clickableBadge`} onClick={() => quickUpdate(s, 'init_ops_scripts', '更新脚本')}>{rb.text}</button> : <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span>}{singboxBadge.outdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'update_singbox', '更新singbox')}> · singbox需更新</button> : null}</div>
+                    <div className="small versionSubline">{(() => { const av = s.metadata?.agent_version || ''; const agentOutdated = av && av !== CURRENT_AGENT_VERSION; return agentOutdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'upgrade_agent', '升级Agent')}>agent {av}→{CURRENT_AGENT_VERSION}</button> : <span>agent {av || '-'}</span>; })()} · {rb.rank < 2 ? <button type="button" className={`inlineReadiness ${rb.tone} clickableBadge`} onClick={() => quickUpdate(s, 'init_ops_scripts', '更新脚本')}>{rb.text}</button> : <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span>}{singboxBadge.outdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'update_singbox', '更新singbox')}> · singbox需更新</button> : null}</div>
                     <div className="small versionSubline">{targetGap(s)}</div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
