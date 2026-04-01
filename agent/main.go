@@ -150,6 +150,11 @@ var actionRegistry = map[string]ActionDef{
         ParamOrder: []string{"username"},
     },
     // === 新增动作 ===
+    "change_server_id": {
+        ScriptPath: "/opt/core-service/scripts/change_server_id.sh",
+        TimeoutSec: 120,
+        ParamOrder: []string{"new_server_id"},
+    },
     "all_install": {
         ScriptPath: "/opt/core-service/scripts/all_install.sh",
         TimeoutSec: 600,

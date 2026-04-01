@@ -78,6 +78,14 @@ const DEFAULT_ACTION_DEFINITIONS = [
     risk_level: 'safe', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 1800, max_retries: 1, auto_enabled: 1, requires_approval: 0, batch_enabled: 1,
     trigger_faults: JSON.stringify(['port_6379_down']), success_criteria: JSON.stringify({ ports_up: [6379] }), fallback_action_key: 'install_redis', priority: 10, metadata: JSON.stringify({})
   },
+  {
+    action_key: 'change_server_id', name: '修改 ServerID', display_name: '修改 ServerID', category: 'repair',
+    description: '修改节点的 ServerID（同步 xagent.yaml InstanceId + bridge.yaml NodeId 并重启服务）',
+    script_path: '/opt/core-service/scripts/change_server_id.sh',
+    param_schema: JSON.stringify({ required: ['new_server_id'], properties: { new_server_id: { type: 'string', maxLength: 32 } } }),
+    role_scope: JSON.stringify(['admin']), risk_level: 'critical', timeout_seconds: 120, executor_type: 'agent', cooldown_seconds: 60, max_retries: 0, auto_enabled: 0, requires_approval: 0, batch_enabled: 0,
+    trigger_faults: JSON.stringify([]), success_criteria: JSON.stringify({ services_active: ['xagent', 'xvpn-bridge-server'], ports_up: [8888, 8610] }), fallback_action_key: '', priority: 1, metadata: JSON.stringify({})
+  },
   // === 新增：全量安装 ===
   {
     action_key: 'all_install', name: '全量安装', display_name: '全量安装', category: 'install',
@@ -857,7 +865,45 @@ app.patch('/api/groups/reorder', authMiddleware, (req, res) => { const { ids } =
 app.get('/api/groups', authMiddleware, (req, res) => res.json(db.prepare(`SELECT id, name, sort_order, created_at FROM groups ORDER BY sort_order ASC, id ASC`).all()));
 app.patch('/api/groups/:id', authMiddleware, (req, res) => { const id = req.params.id; const { name } = req.body || {}; if (!name) return res.status(400).json({ error: 'name required' }); const old = db.prepare(`SELECT name FROM groups WHERE id = ?`).get(id); if (!old) return res.status(404).json({ error: 'group not found' }); db.prepare(`UPDATE groups SET name = ? WHERE id = ?`).run(name, id); db.prepare(`UPDATE servers SET group_name = ? WHERE group_name = ?`).run(name, old.name); res.json({ ok: true }); });
 app.delete('/api/groups/:id', authMiddleware, (req, res) => { const id = req.params.id; const row = db.prepare(`SELECT name FROM groups WHERE id = ?`).get(id); if (!row) return res.status(404).json({ error: 'group not found' }); if (row.name === DEFAULT_GROUP) return res.status(400).json({ error: `cannot delete ${DEFAULT_GROUP}` }); db.prepare(`UPDATE servers SET group_name = ? WHERE group_name = ?`).run(DEFAULT_GROUP, row.name); db.prepare(`DELETE FROM groups WHERE id = ?`).run(id); res.json({ ok: true }); });
-app.patch('/api/servers/:serverId', authMiddleware, (req, res) => { const serverId = req.params.serverId; const { display_name, group_name } = req.body || {}; if (group_name) ensureGroup.run(group_name, 999); db.prepare(`UPDATE servers SET display_name = COALESCE(?, display_name), group_name = COALESCE(?, group_name), updated_at = ? WHERE server_id = ?`).run(display_name || null, group_name || null, new Date().toISOString(), serverId); res.json({ ok: true }); });
+app.patch('/api/servers/:serverId', authMiddleware, (req, res) => {
+  const serverId = req.params.serverId;
+  const { display_name, group_name, instance_id } = req.body || {};
+  if (group_name) ensureGroup.run(group_name, 999);
+
+  // If instance_id is being changed, update DB and dispatch change_server_id task to agent
+  if (instance_id !== undefined && instance_id !== null) {
+    const newInstanceId = String(instance_id).trim();
+    if (!newInstanceId || !/^\d+$/.test(newInstanceId)) {
+      return res.status(400).json({ error: 'instance_id must be a positive integer' });
+    }
+    const server = db.prepare(`SELECT instance_id, ip FROM servers WHERE server_id = ?`).get(serverId);
+    const oldInstanceId = server?.instance_id || '';
+
+    // Update the DB immediately
+    db.prepare(`UPDATE servers SET display_name = COALESCE(?, display_name), group_name = COALESCE(?, group_name), instance_id = ?, updated_at = ? WHERE server_id = ?`).run(
+      display_name || null, group_name || null, newInstanceId, new Date().toISOString(), serverId
+    );
+
+    // If instance_id actually changed, dispatch change_server_id task to the agent
+    if (newInstanceId !== oldInstanceId) {
+      const activeTask = db.prepare(`SELECT task_id FROM action_tasks WHERE server_id = ? AND status IN ('pending', 'leased', 'running') LIMIT 1`).get(serverId);
+      if (!activeTask) {
+        const taskId = genTaskId();
+        db.prepare(`INSERT INTO action_tasks(task_id, server_id, action_key, params_json, status, source, created_by, priority, timeout_seconds, metadata) VALUES (?, ?, 'change_server_id', ?, 'pending', 'dashboard', 'server-id-edit', 1, 120, '{}')`).run(
+          taskId, serverId, JSON.stringify({ new_server_id: newInstanceId })
+        );
+        return res.json({ ok: true, instance_id_changed: true, old: oldInstanceId, new: newInstanceId, task_id: taskId });
+      } else {
+        return res.json({ ok: true, instance_id_changed: true, old: oldInstanceId, new: newInstanceId, task_id: null, warning: 'server has active task, change_server_id will be dispatched after current task completes' });
+      }
+    }
+
+    return res.json({ ok: true, instance_id_changed: false });
+  }
+
+  db.prepare(`UPDATE servers SET display_name = COALESCE(?, display_name), group_name = COALESCE(?, group_name), updated_at = ? WHERE server_id = ?`).run(display_name || null, group_name || null, new Date().toISOString(), serverId);
+  res.json({ ok: true });
+});
 app.delete('/api/servers/:serverId', authMiddleware, (req, res) => { const serverId = req.params.serverId; const deletedMetricRows = db.prepare(`DELETE FROM metrics WHERE server_id = ?`).run(serverId).changes; const deletedServerRows = db.prepare(`DELETE FROM servers WHERE server_id = ?`).run(serverId).changes; res.json({ ok: deletedServerRows > 0, deletedServerRows, deletedMetricRows, serverId }); });
 app.get('/api/servers', authMiddleware, (req, res) => { const { group } = req.query; const sql = group && group !== 'ALL' ? `SELECT s.*, m.cpu_usage, m.memory_usage, m.disk_usage, m.port_443, m.port_6379, m.port_8888, m.port_8610, m.issues FROM servers s LEFT JOIN metrics m ON m.id = (SELECT id FROM metrics WHERE server_id = s.server_id ORDER BY id DESC LIMIT 1) WHERE s.group_name = ? ORDER BY CASE WHEN s.status IN ('problem','offline') THEN 0 ELSE 1 END ASC, s.stable_order ASC` : `SELECT s.*, m.cpu_usage, m.memory_usage, m.disk_usage, m.port_443, m.port_6379, m.port_8888, m.port_8610, m.issues FROM servers s LEFT JOIN metrics m ON m.id = (SELECT id FROM metrics WHERE server_id = s.server_id ORDER BY id DESC LIMIT 1) ORDER BY CASE WHEN s.status IN ('problem','offline') THEN 0 ELSE 1 END ASC, s.stable_order ASC`; const rows = group && group !== 'ALL' ? db.prepare(sql).all(group) : db.prepare(sql).all(); const now = Date.now(), offlineMs = OFFLINE_AFTER_SECONDS * 1000; const mapped = rows.filter((row) => row.server_id !== 'manual-test-node' && row.ip !== '127.0.0.2').map((row) => { const lastSeenMs = row.last_seen ? new Date(row.last_seen).getTime() : 0; const offline = !lastSeenMs || now - lastSeenMs > offlineMs; const issues = JSON.parse(row.issues || '[]'); const metadata = JSON.parse(row.metadata || '{}'); const diagnostics = JSON.parse(row.diagnostics || '{}'); return { ...row, metadata, diagnostics, status: offline ? 'offline' : row.status, issues: offline ? [...issues, 'Heartbeat timeout'] : issues, stale: offline, offline_seconds: lastSeenMs ? Math.max(0, Math.floor((now - lastSeenMs) / 1000)) : null }; }).sort((a, b) => { const aProblem = a.status === 'problem' || a.status === 'offline' ? 0 : 1; const bProblem = b.status === 'problem' || b.status === 'offline' ? 0 : 1; return aProblem - bProblem || (a.stable_order || a.id) - (b.stable_order || b.id); }); res.json(mapped); });
 app.listen(PORT, () => console.log(`server-monitor backend running on :${PORT}`));
