@@ -15,7 +15,7 @@ import IncidentPanel from './IncidentPanel';
 import NotificationSettingsModal from './NotificationSettingsModal';
 import IncidentHistoryModal from './IncidentHistoryModal';
 
-const CURRENT_OPS_VERSION = '2026.04.01-01';
+const CURRENT_OPS_VERSION = '2026.04.01-02';
 const CURRENT_AGENT_VERSION = '1.11.0';
 
 function pct(value) {
