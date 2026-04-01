@@ -571,6 +571,8 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     diskUsage := percent(diskUsed, diskTotal)
     ports := map[string]bool{}
     for _, p := range []string{"443", "6379", "8888", "8610"} { ports[p] = checkPort("127.0.0.1:" + p) }
+    // Port 443 may be UDP-only (QUIC/H3), fallback to ss check
+    if !ports["443"] { ports["443"] = checkPortUDP(443) }
 
     // Collect diagnostics when thresholds exceeded
     var diag *Diagnostics
@@ -779,6 +781,10 @@ func calculateCPU(a, b cpuStat) float64 { totald := float64(b.total - a.total); 
 func readMemInfo() (uint64, uint64, error) { data, err := os.ReadFile("/proc/meminfo"); if err != nil { return 0, 0, err }; var total, avail uint64; scanner := bufio.NewScanner(bytes.NewReader(data)); for scanner.Scan() { line := scanner.Text(); if strings.HasPrefix(line, "MemTotal:") { fields := strings.Fields(line); total, _ = strconv.ParseUint(fields[1], 10, 64); total *= 1024 }; if strings.HasPrefix(line, "MemAvailable:") { fields := strings.Fields(line); avail, _ = strconv.ParseUint(fields[1], 10, 64); avail *= 1024 } }; if total == 0 { return 0, 0, fmt.Errorf("meminfo parse failed") }; return total, avail, nil }
 func readDiskUsage(path string) (uint64, uint64, error) { var stat syscall.Statfs_t; if err := syscall.Statfs(path, &stat); err != nil { return 0, 0, err }; total := stat.Blocks * uint64(stat.Bsize); free := stat.Bavail * uint64(stat.Bsize); used := total - free; return total, used, nil }
 func checkPort(addr string) bool { conn, err := net.DialTimeout("tcp", addr, 1200*time.Millisecond); if err != nil { return false }; _ = conn.Close(); return true }
+func checkPortUDP(port int) bool {
+	out, _ := osExec.Command("ss", "-uln").Output()
+	return strings.Contains(string(out), fmt.Sprintf(":%d ", port))
+}
 func detectCoreOn443() string {
 	out, err := osExec.Command("sh", "-c", `ss -tulnp 2>/dev/null | grep ':443 ' | head -1`).Output()
 	if err != nil || len(out) == 0 { return "" }
