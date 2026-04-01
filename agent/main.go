@@ -22,7 +22,7 @@ import (
 )
 
 // AgentVersion is set at build time via -ldflags "-X main.AgentVersion=x.y.z"
-var AgentVersion = "1.11.0"
+var AgentVersion = "1.12.0"
 
 type Payload struct {
     ServerID     string            `json:"server_id"`
@@ -594,8 +594,9 @@ func collect(displayName string, intervalSec int) (*Payload, error) {
     singboxVersion := readVersionFile("/opt/core-service/singbox-server/VERSION")
     xbridgeVersion := readVersionFile("/opt/core-service/xbrigde-server/VERSION")
     xassetsVersion := readVersionFile("/opt/core-service/xassets/VERSION")
+    coreOn443 := detectCoreOn443()
 
-    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": AgentVersion, "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion, "xagent_md5": xagentMd5, "xbridge_md5": xbridgeMd5, "xray_md5": xrayMd5, "singbox_md5": singboxMd5, "xagent_version": xagentVersion, "xray_version": xrayVersion, "singbox_version": singboxVersion, "xbridge_version": xbridgeVersion, "xassets_version": xassetsVersion}, Diagnostics: diag}, nil
+    return &Payload{ServerID: id, Hostname: hostname, DisplayName: fallback(displayName, hostname), IP: ip, OS: runtime.GOOS, Arch: runtime.GOARCH, InstanceID: instanceID, CPUUsage: cpuUsage, CPUCount: runtime.NumCPU(), MemoryUsage: memUsage, MemoryUsed: memUsed, MemoryTotal: memTotal, DiskUsage: diskUsage, DiskUsed: diskUsed, DiskTotal: diskTotal, Ports: ports, Metadata: map[string]string{"agent_version": AgentVersion, "report_interval": strconv.Itoa(intervalSec), "ops_scripts_version": opsVersion, "xagent_md5": xagentMd5, "xbridge_md5": xbridgeMd5, "xray_md5": xrayMd5, "singbox_md5": singboxMd5, "xagent_version": xagentVersion, "xray_version": xrayVersion, "singbox_version": singboxVersion, "xbridge_version": xbridgeVersion, "xassets_version": xassetsVersion, "core_on_443": coreOn443}, Diagnostics: diag}, nil
 }
 
 func collectDiagnostics(cpuAlert, memAlert, diskAlert bool) *Diagnostics {
@@ -778,6 +779,27 @@ func calculateCPU(a, b cpuStat) float64 { totald := float64(b.total - a.total); 
 func readMemInfo() (uint64, uint64, error) { data, err := os.ReadFile("/proc/meminfo"); if err != nil { return 0, 0, err }; var total, avail uint64; scanner := bufio.NewScanner(bytes.NewReader(data)); for scanner.Scan() { line := scanner.Text(); if strings.HasPrefix(line, "MemTotal:") { fields := strings.Fields(line); total, _ = strconv.ParseUint(fields[1], 10, 64); total *= 1024 }; if strings.HasPrefix(line, "MemAvailable:") { fields := strings.Fields(line); avail, _ = strconv.ParseUint(fields[1], 10, 64); avail *= 1024 } }; if total == 0 { return 0, 0, fmt.Errorf("meminfo parse failed") }; return total, avail, nil }
 func readDiskUsage(path string) (uint64, uint64, error) { var stat syscall.Statfs_t; if err := syscall.Statfs(path, &stat); err != nil { return 0, 0, err }; total := stat.Blocks * uint64(stat.Bsize); free := stat.Bavail * uint64(stat.Bsize); used := total - free; return total, used, nil }
 func checkPort(addr string) bool { conn, err := net.DialTimeout("tcp", addr, 1200*time.Millisecond); if err != nil { return false }; _ = conn.Close(); return true }
+func detectCoreOn443() string {
+	out, err := osExec.Command("sh", "-c", `ss -tulnp 2>/dev/null | grep ':443 ' | head -1`).Output()
+	if err != nil || len(out) == 0 { return "" }
+	line := string(out)
+	if strings.Contains(line, "singbox") || strings.Contains(line, "sing-box") { return "singbox" }
+	if strings.Contains(line, "xray") { return "xray" }
+	// Fallback: check /proc/<pid>/exe for the process name
+	// Extract PID from ss output like: users:(("singbox",pid=12345,fd=8))
+	if idx := strings.Index(line, "pid="); idx >= 0 {
+		rest := line[idx+4:]
+		if end := strings.IndexByte(rest, ','); end > 0 {
+			pid := rest[:end]
+			if link, err := os.Readlink("/proc/" + pid + "/exe"); err == nil {
+				base := strings.ToLower(link)
+				if strings.Contains(base, "singbox") || strings.Contains(base, "sing-box") { return "singbox" }
+				if strings.Contains(base, "xray") { return "xray" }
+			}
+		}
+	}
+	return ""
+}
 func report(url string, payload *Payload) error { body, _ := json.Marshal(payload); req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(body)); req.Header.Set("Content-Type", "application/json"); client := &http.Client{Timeout: 8 * time.Second}; resp, err := client.Do(req); if err != nil { return err }; defer resp.Body.Close(); if resp.StatusCode >= 300 { return fmt.Errorf("unexpected status %d", resp.StatusCode) }; return nil }
 func readInstanceID(filePath string) string { data, err := os.ReadFile(filePath); if err != nil { return "" }; scanner := bufio.NewScanner(bytes.NewReader(data)); for scanner.Scan() { line := strings.TrimSpace(scanner.Text()); if strings.HasPrefix(line, "InstanceId:") { return strings.TrimSpace(strings.TrimPrefix(line, "InstanceId:")) } }; return "" }
 func readVersionFile(filePath string) string { data, err := os.ReadFile(filePath); if err != nil { return "" }; return strings.TrimSpace(string(data)) }

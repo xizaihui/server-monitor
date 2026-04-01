@@ -705,6 +705,7 @@ tr.offlineRow td:last-child { background: #f8f8f8; }
 
 .portSquare.up { background: var(--color-success); }
 .portSquare.down { background: var(--color-danger); }
+.portSquare.inactive { background: #d0d5dd; }
 
 /* ── Action column — more button ── */
 .menuWrap { display: flex; justify-content: center; }

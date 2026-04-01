@@ -16,7 +16,7 @@ import NotificationSettingsModal from './NotificationSettingsModal';
 import IncidentHistoryModal from './IncidentHistoryModal';
 
 const CURRENT_OPS_VERSION = '2026.04.01-03';
-const CURRENT_AGENT_VERSION = '1.11.0';
+const CURRENT_AGENT_VERSION = '1.12.0';
 
 function pct(value) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -586,7 +586,7 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                       </button>
                       {s.ip ? <button type="button" className="miniCopyBtn inlineCopyBtn" onClick={() => copyText(s.ip)}>复制</button> : null}
                     </div>
-                    <div className="small versionSubline">{(() => { const av = s.metadata?.agent_version || ''; const agentOutdated = av && av !== CURRENT_AGENT_VERSION; return agentOutdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'upgrade_agent', '升级Agent')}>agent {av}→{CURRENT_AGENT_VERSION}</button> : <span>agent {av || '-'}</span>; })()} · {rb.rank < 2 ? <button type="button" className={`inlineReadiness ${rb.tone} clickableBadge`} onClick={() => quickUpdate(s, 'init_ops_scripts', '更新脚本')}>{rb.text}</button> : <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span>}{singboxBadge.outdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'update_singbox', '更新singbox')}> · singbox需更新</button> : null}</div>
+                    <div className="small versionSubline">{(() => { const av = s.metadata?.agent_version || ''; const agentOutdated = av && av !== CURRENT_AGENT_VERSION; return agentOutdated ? <button type="button" className="inlineReadiness problem clickableBadge" onClick={() => quickUpdate(s, 'upgrade_agent', '升级Agent')}>agent {av}→{CURRENT_AGENT_VERSION}</button> : <span>agent {av || '-'}</span>; })()} · {rb.rank < 2 ? <button type="button" className={`inlineReadiness ${rb.tone} clickableBadge`} onClick={() => quickUpdate(s, 'init_ops_scripts', '更新脚本')}>{rb.text}</button> : <span className={`inlineReadiness ${rb.tone}`}>{rb.text}</span>}</div>
                     <div className="small versionSubline">{targetGap(s)}</div>
                   </td>
                   <td className="metric sharpText slimTextCell">{s.instance_id || '-'}</td>
@@ -600,8 +600,24 @@ export default function DashboardClient({ servers: initialServers, groups, selec
                   <td><MetricBar value={s.cpu_usage} alert={hasIssue(s, 'CPU')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.memory_usage} alert={hasIssue(s, '内存')} offline={s.status === 'offline'} /></td>
                   <td><MetricBar value={s.disk_usage} alert={hasIssue(s, '磁盘')} offline={s.status === 'offline'} /></td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <>{singboxBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_singbox', '更新singbox')}>更新</button> : <span className={`compVerBadge ${singboxBadge.tone}`}>{singboxBadge.text}</span>}</>}</td>
-                  <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_443 ? 'up' : 'down'}`}>{s.port_443 ? 'UP' : 'DOWN'}</span>{xrayBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xray', '更新xray')}>更新</button> : null}</>}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : (() => {
+                    const coreOn443 = m.core_on_443 || '';
+                    const isActive = coreOn443 === 'singbox';
+                    const isUnknown = !coreOn443 && s.port_443;
+                    if (singboxBadge.outdated) return <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_singbox', '更新singbox')}>更新</button>;
+                    if (isActive) return <span className="portSquare compactPortSquare up" title="singbox on :443">UP</span>;
+                    if (isUnknown) return <span className="portSquare compactPortSquare up" title="443 UP (core unknown)">UP</span>;
+                    return <span className="portSquare compactPortSquare inactive" title="未运行">-</span>;
+                  })()}</td>
+                  <td className="portCell">{s.status === 'offline' ? '-' : (() => {
+                    const coreOn443 = m.core_on_443 || '';
+                    const isActive = coreOn443 === 'xray';
+                    const isUnknown = !coreOn443 && s.port_443;
+                    if (xrayBadge.outdated) return <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xray', '更新xray')}>更新</button>;
+                    if (isActive) return <span className="portSquare compactPortSquare up" title="xray on :443">UP</span>;
+                    if (isUnknown) return <span className="portSquare compactPortSquare up" title="443 UP (core unknown)">UP</span>;
+                    return <span className="portSquare compactPortSquare inactive" title="未运行">-</span>;
+                  })()}</td>
                   <td className="portCell">{s.status === 'offline' ? '-' : <span className={`portSquare compactPortSquare ${s.port_6379 ? 'up' : 'down'}`}>{s.port_6379 ? 'UP' : 'DOWN'}</span>}</td>
                   <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8888 ? 'up' : 'down'}`}>{s.port_8888 ? 'UP' : 'DOWN'}</span>{xagentBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xagent', '更新xagent')}>更新</button> : null}</>}</td>
                   <td className="portCell">{s.status === 'offline' ? '-' : <><span className={`portSquare compactPortSquare ${s.port_8610 ? 'up' : 'down'}`}>{s.port_8610 ? 'UP' : 'DOWN'}</span>{xbridgeBadge.outdated ? <button type="button" className="compVerBadge problem clickableBadge" onClick={() => quickUpdate(s, 'update_xbridge', '更新xbridge')}>更新</button> : null}</>}</td>
